@@ -474,21 +474,43 @@ legend {
 
 .process-step {
   position: relative;
+  isolation: isolate;
   min-height: 78px;
+  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fbfbf8;
   padding: 12px;
+  transform: translateZ(0);
+  transition:
+    min-height 300ms ease,
+    border-color 300ms ease,
+    background 300ms ease,
+    box-shadow 300ms ease,
+    transform 300ms ease;
 }
 
 .process-step.active {
+  min-height: 118px;
   border-color: #aec8ba;
   background: #eef7f3;
+  box-shadow: 0 16px 34px rgba(52, 88, 71, 0.14);
+  transform: translateY(-1px);
 }
 
 .process-step.complete {
   border-color: #cfe3d6;
   background: #f4fbf6;
+}
+
+.process-step.active::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(110deg, transparent 0%, rgba(255, 255, 255, 0.56) 42%, transparent 68%);
+  transform: translateX(-120%);
+  animation: processSweep 1.8s ease-in-out infinite;
 }
 
 .process-marker {
@@ -502,11 +524,18 @@ legend {
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 850;
+  transition:
+    background 280ms ease,
+    color 280ms ease,
+    box-shadow 280ms ease,
+    transform 280ms ease;
 }
 
 .process-step.active .process-marker {
   background: var(--sage);
   color: #fff;
+  box-shadow: 0 0 0 7px rgba(73, 119, 94, 0.14);
+  animation: markerPulse 1.45s ease-in-out infinite;
 }
 
 .process-step.complete .process-marker {
@@ -514,7 +543,7 @@ legend {
   color: #fff;
 }
 
-.process-step > div:nth-child(2) {
+.process-copy {
   flex: 1;
   min-width: 0;
 }
@@ -537,9 +566,40 @@ legend {
   font-size: 0.72rem;
   font-weight: 800;
   white-space: nowrap;
+  transition:
+    border-color 280ms ease,
+    background 280ms ease,
+    color 280ms ease,
+    transform 280ms ease;
+}
+
+.process-step.active .process-step-header span {
+  border-color: rgba(73, 119, 94, 0.18);
+  background: #fff;
+  color: #2f6f4a;
+  transform: translateY(-1px);
+}
+
+.process-step-detail {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition:
+    grid-template-rows 320ms ease,
+    opacity 240ms ease,
+    transform 320ms ease;
+}
+
+.process-step.active .process-step-detail,
+.process-step.complete:last-child .process-step-detail {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .process-step p {
+  overflow: hidden;
   margin: 6px 0 0;
   color: #4f555d;
   font-size: 0.84rem;
@@ -550,6 +610,32 @@ legend {
   color: var(--sage);
   font-size: 0.74rem;
   text-transform: uppercase;
+  transition: color 280ms ease, transform 280ms ease;
+}
+
+.process-step.active > strong {
+  color: #2f6f4a;
+  transform: translateY(-1px);
+}
+
+@keyframes processSweep {
+  0% {
+    transform: translateX(-120%);
+  }
+  58%,
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@keyframes markerPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 7px rgba(73, 119, 94, 0.14);
+  }
+  50% {
+    box-shadow: 0 0 0 11px rgba(73, 119, 94, 0.06);
+  }
 }
 
 .product-card {
@@ -826,6 +912,10 @@ ol {
 .chat-process .process-step {
   align-items: flex-start;
   min-height: auto;
+}
+
+.chat-process .process-step.active {
+  min-height: 128px;
 }
 
 .chat-process .process-step-header {

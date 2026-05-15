@@ -136,7 +136,7 @@ function renderInspiration() {
         state.selectedId = product.id;
         state.customImageDataUrl = null;
         renderInspiration();
-        requestRecommendations();
+        resetRecommendationView();
       });
       return tile;
     })
@@ -171,7 +171,7 @@ async function loadImageFile(file) {
   try {
     state.customImageDataUrl = await imageFileToDataUrl(file);
     renderInspiration();
-    requestRecommendations();
+    resetRecommendationView();
   } catch (error) {
     console.error(error);
     els.productGrid.innerHTML = `<div class="empty-state">Could not read that image. Try a PNG or JPEG.</div>`;
@@ -208,6 +208,13 @@ function resetChat() {
   state.changedProductIds = [];
 }
 
+function resetRecommendationView() {
+  state.latest = null;
+  state.changedProductIds = [];
+  resetChat();
+  renderIdleState();
+}
+
 function loadingProcessMarkup() {
   const active = state.loadingStage;
   const rows = loadingSteps.map((step, index) => {
@@ -216,12 +223,14 @@ function loadingProcessMarkup() {
     return `
       <article class="process-step ${status}">
         <div class="process-marker">${status === "complete" ? "✓" : index + 1}</div>
-        <div>
+        <div class="process-copy">
           <div class="process-step-header">
             <h3>${escapeHtml(step.title)}</h3>
             <span>${escapeHtml(step.service)}</span>
           </div>
-          <p>${escapeHtml(step.detail)}</p>
+          <div class="process-step-detail">
+            <p>${escapeHtml(step.detail)}</p>
+          </div>
         </div>
         <strong>${label}</strong>
       </article>
@@ -264,17 +273,17 @@ function renderChat() {
   els.chatInput.disabled = !hasRecommendation || !hasOpenAI || state.chat.isBusy || state.isGenerating;
   els.chatForm.querySelector("button").disabled = !hasRecommendation || !hasOpenAI || state.chat.isBusy || state.isGenerating;
 
-  if (!hasOpenAI) {
-    els.chatMessages.innerHTML = `<div class="chat-empty">OpenAI API key required for agentic chat refinement.</div>`;
-    return;
-  }
-
   if (state.isGenerating) {
     els.chatMessages.innerHTML = `
       <div class="chat-message from-agent">I’m building the basket now. I’ll show products only after the final guardrail review confirms the outfit and explanation are sound.</div>
       ${loadingProcessMarkup()}
     `;
     els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+    return;
+  }
+
+  if (!hasOpenAI) {
+    els.chatMessages.innerHTML = `<div class="chat-empty">OpenAI API key required for agentic chat refinement.</div>`;
     return;
   }
 
@@ -317,10 +326,39 @@ function clearLoadingTimer() {
 
 function setGenerateButtonState(isLoading) {
   els.generateButton.disabled = isLoading;
-  els.refreshButton.disabled = isLoading;
+  els.refreshButton.disabled = isLoading || !state.latest;
   els.generateButton.classList.toggle("is-loading", isLoading);
   els.generateButton.querySelector("span").textContent = isLoading ? "…" : "+";
   els.generateButton.querySelector("strong").textContent = isLoading ? "Generating..." : "Generate outfit";
+}
+
+function renderIdleState() {
+  const hasOpenAI = Boolean(state.bootstrap?.hasOpenAI);
+  els.statusLabel.textContent = hasOpenAI ? "OpenAI ready" : "Local fallback ready";
+  els.statusDot.classList.toggle("is-live", hasOpenAI);
+  els.analysisStrip.innerHTML = `
+    <div>
+      <p class="eyebrow">Ready when you are</p>
+      <p><strong>Choose a starter item and constraints, then press Generate outfit.</strong> Nothing will run until you start the recommendation.</p>
+    </div>
+    <div class="analysis-tags">
+      <span>${hasOpenAI ? "OpenAI" : "Fallback"}</span>
+      <span>RAG</span>
+      <span>Inventory</span>
+      <span>Guardrails</span>
+    </div>
+  `;
+  els.productGrid.classList.remove("is-process");
+  els.productGrid.innerHTML = `<div class="empty-state">Your outfit recommendations will appear here after you press Generate outfit.</div>`;
+  els.kpiGrid.replaceChildren();
+  els.insightBlock.innerHTML = "";
+  els.pipelineList.replaceChildren(...loadingSteps.map((step) => {
+    const li = document.createElement("li");
+    li.textContent = step.title;
+    return li;
+  }));
+  renderChat();
+  setGenerateButtonState(false);
 }
 
 function renderLoadingProcess() {
@@ -370,10 +408,22 @@ function startLoadingProcess() {
 
 function finishLoadingProcess() {
   clearLoadingTimer();
-  state.loadingStage = loadingSteps.length - 1;
-  state.loadingDone = true;
-  renderLoadingProcess();
-  return new Promise((resolve) => setTimeout(resolve, 450));
+  const remaining = [];
+  for (let index = state.loadingStage + 1; index < loadingSteps.length; index += 1) {
+    remaining.push(index);
+  }
+  return remaining
+    .reduce((promise, index) => promise.then(() => {
+      state.loadingStage = index;
+      renderLoadingProcess();
+      return new Promise((resolve) => setTimeout(resolve, 260));
+    }), Promise.resolve())
+    .then(() => {
+      state.loadingStage = loadingSteps.length - 1;
+      state.loadingDone = true;
+      renderLoadingProcess();
+      return new Promise((resolve) => setTimeout(resolve, 650));
+    });
 }
 
 function renderResult(data, options = {}) {
@@ -567,14 +617,12 @@ function rejectChatPreview() {
 async function init() {
   const response = await fetch("/api/bootstrap");
   state.bootstrap = await response.json();
-  els.statusLabel.textContent = state.bootstrap.hasOpenAI ? "OpenAI configured" : "Local fallback";
-  els.statusDot.classList.toggle("is-live", Boolean(state.bootstrap.hasOpenAI));
   state.selectedId = state.bootstrap.inspiration[0].id;
   optionList(els.eventType, state.bootstrap.events);
   optionList(els.stylePreference, state.bootstrap.styles);
   storeOptions(els.store, state.bootstrap.stores);
   renderInspiration();
-  await requestRecommendations();
+  renderIdleState();
 }
 
 els.budgetMax.addEventListener("input", () => {
@@ -628,7 +676,7 @@ els.clearUpload.addEventListener("click", (event) => {
   event.stopPropagation();
   state.customImageDataUrl = null;
   renderInspiration();
-  requestRecommendations();
+  resetRecommendationView();
 });
 
 els.uploadZone.addEventListener("dragover", (event) => {
