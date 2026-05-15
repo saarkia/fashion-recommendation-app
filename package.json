@@ -1,0 +1,10 @@
+{
+  "name": "fashion-recommendation-app",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prepare:data": "python3 scripts/prepare_data.py",
+    "start": "node server/index.mjs"
+  }
+}

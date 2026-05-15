@@ -1,0 +1,11 @@
+{
+  "embeddingDimensions": 3072,
+  "productCount": 1000,
+  "stores": [
+    "Chicago Loop",
+    "Dallas NorthPark",
+    "New York Herald Square",
+    "San Francisco Centre"
+  ],
+  "source": "openai-cookbook-main/examples/data/sample_clothes/sample_styles_with_embeddings.csv"
+}

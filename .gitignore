@@ -1,0 +1,12 @@
+node_modules/
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.DS_Store
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+slides/
+scripts/render_deck.cjs

@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fashion Recommendation App</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="workspace">
+        <header class="topbar" aria-label="Application header">
+          <div>
+            <p class="eyebrow">Fashion Recommendation App</p>
+            <h1>Event Stylist</h1>
+          </div>
+          <div class="status-pill">
+            <span class="status-dot" id="statusDot"></span>
+            <span id="statusLabel">RAG catalog demo</span>
+          </div>
+        </header>
+
+        <section class="control-band" aria-label="Styling inputs">
+          <div class="starter-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Starter item</p>
+                <h2>Select an item a customer owns</h2>
+              </div>
+              <button class="icon-button" id="refreshButton" type="button" title="Refresh recommendations" aria-label="Refresh recommendations">
+                <span aria-hidden="true">R</span>
+              </button>
+            </div>
+            <div class="upload-zone" id="uploadZone" tabindex="0" role="button" aria-label="Upload or paste a clothing image">
+              <input id="imageUpload" type="file" accept="image/*" hidden />
+              <div class="upload-copy">
+                <strong>Use your own image</strong>
+                <span>Paste from clipboard, drag in, or click to upload</span>
+              </div>
+              <img id="customPreview" alt="Uploaded starter item preview" hidden />
+              <button class="clear-upload" id="clearUpload" type="button" hidden>Clear</button>
+            </div>
+            <div class="inspiration-grid" id="inspirationGrid" aria-label="Starter item choices"></div>
+          </div>
+
+          <form class="intent-panel" id="intentForm">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Event intent</p>
+                <h2>Turn customer context into a basket</h2>
+              </div>
+            </div>
+
+            <label>
+              Occasion
+              <select name="eventType" id="eventType"></select>
+            </label>
+
+            <label>
+              Style preference
+              <select name="stylePreference" id="stylePreference"></select>
+            </label>
+
+            <label>
+              Store
+              <select name="store" id="store"></select>
+            </label>
+
+            <label>
+              Budget
+              <input name="budgetMax" id="budgetMax" type="range" min="150" max="650" step="25" value="375" />
+              <span class="range-readout" id="budgetReadout">$375 max basket</span>
+            </label>
+
+            <fieldset>
+              <legend>Urgency</legend>
+              <label class="radio-row">
+                <input type="radio" name="urgency" value="today" checked />
+                Available today
+              </label>
+              <label class="radio-row">
+                <input type="radio" name="urgency" value="network" />
+                Ship or transfer
+              </label>
+            </fieldset>
+
+            <button class="primary-button" id="generateButton" type="submit">
+              <span aria-hidden="true">+</span>
+              <strong>Generate outfit</strong>
+            </button>
+          </form>
+        </section>
+
+        <section class="results-band" aria-live="polite">
+          <div class="analysis-strip" id="analysisStrip"></div>
+          <div class="product-grid" id="productGrid"></div>
+        </section>
+      </section>
+
+      <aside class="business-panel" aria-label="Stylist agent panel">
+        <div class="chat-block" id="chatBlock">
+          <div class="panel-heading chat-heading">
+            <div>
+              <p class="eyebrow">Stylist assistant</p>
+              <h2>Stylist agent</h2>
+            </div>
+          </div>
+          <div class="chat-messages" id="chatMessages" aria-live="polite"></div>
+          <div class="quick-prompts" id="quickPrompts" aria-label="Quick stylist prompts">
+            <button type="button">Why these?</button>
+            <button type="button">Make it cheaper</button>
+            <button type="button">More formal</button>
+            <button type="button">Different color</button>
+            <button type="button">Swap shoes</button>
+            <button type="button">Only available today</button>
+          </div>
+          <form class="chat-form" id="chatForm">
+            <input id="chatInput" name="message" autocomplete="off" placeholder="Ask for changes..." />
+            <button type="submit">Send</button>
+          </form>
+        </div>
+        <div class="side-data" hidden>
+          <div class="kpi-grid" id="kpiGrid"></div>
+          <div class="insight-block" id="insightBlock"></div>
+          <div class="pipeline-block">
+            <ol id="pipelineList"></ol>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <template id="productTemplate">
+      <article class="product-card">
+        <div class="image-wrap">
+          <img alt="" />
+          <span class="role-badge"></span>
+        </div>
+        <div class="product-copy">
+          <h3></h3>
+          <p class="meta"></p>
+          <p class="why"></p>
+        </div>
+        <div class="product-footer">
+          <span class="price"></span>
+          <span class="score"></span>
+        </div>
+      </article>
+    </template>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
