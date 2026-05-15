@@ -3,32 +3,65 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Fashion Recommendation App</title>
+    <title>RetailNext Event Stylist</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <main class="app-shell">
       <section class="workspace">
-        <header class="topbar" aria-label="Application header">
-          <div>
-            <p class="eyebrow">Fashion Recommendation App</p>
-            <h1>Event Stylist</h1>
+        <header class="topbar" aria-label="RetailNext header">
+          <div class="masthead-row">
+            <nav class="audience-tabs" aria-label="Audience">
+              <a href="#starterPanel" aria-current="page">Men</a>
+              <a href="#starterPanel">Women</a>
+            </nav>
+            <a class="brand-lockup" href="/" aria-label="RetailNext home">
+              <span class="wordmark" aria-hidden="true"><span class="wordmark-retail">retail</span><span class="wordmark-next">NEXT</span><span class="wordmark-dot">.</span></span>
+              <span class="sr-only">RetailNext</span>
+            </a>
+            <div class="header-actions">
+              <a class="search-chip" href="#intentForm" aria-label="Search outfit context">
+                <span aria-hidden="true">⌕</span>
+                <span>Search outfits</span>
+              </a>
+              <a class="header-icon" href="#resultsBand" aria-label="Saved looks">♡</a>
+              <div class="status-pill">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusLabel">RAG catalog demo</span>
+              </div>
+            </div>
           </div>
-          <div class="status-pill">
-            <span class="status-dot" id="statusDot"></span>
-            <span id="statusLabel">RAG catalog demo</span>
-          </div>
+          <nav class="top-nav" aria-label="Catalog sections">
+            <a href="#starterPanel">New In</a>
+            <a href="#starterPanel">Brands</a>
+            <a href="#starterPanel">Footwear</a>
+            <a href="#starterPanel">Clothing</a>
+            <a href="#intentForm">Accessories</a>
+            <a href="#intentForm">Lifestyle</a>
+            <a href="#resultsBand">Active</a>
+            <a href="#resultsBand">Launches</a>
+            <a href="#resultsBand" class="sale-link">Sale</a>
+          </nav>
         </header>
 
+        <section class="hero-strip" aria-label="RetailNext event stylist">
+          <div class="hero-copy">
+            <p class="eyebrow">Event Stylist</p>
+            <h1>Complete the look.</h1>
+            <p>Build event-ready baskets from a starter item, live inventory, and style intent.</p>
+          </div>
+          <a class="hero-cta" href="#starterPanel">Start styling</a>
+        </section>
+
         <section class="control-band" aria-label="Styling inputs">
-          <div class="starter-panel">
+          <div class="starter-panel" id="starterPanel">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">Starter item</p>
                 <h2>Select an item a customer owns</h2>
               </div>
               <button class="icon-button" id="refreshButton" type="button" title="Refresh recommendations" aria-label="Refresh recommendations">
-                <span aria-hidden="true">R</span>
+                <span aria-hidden="true">↻</span>
               </button>
             </div>
             <div class="upload-zone" id="uploadZone" tabindex="0" role="button" aria-label="Upload or paste a clothing image">
@@ -91,7 +124,7 @@
           </form>
         </section>
 
-        <section class="results-band" aria-live="polite">
+        <section class="results-band" id="resultsBand" aria-live="polite">
           <div class="analysis-strip" id="analysisStrip"></div>
           <div class="product-grid" id="productGrid"></div>
         </section>

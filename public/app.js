@@ -217,11 +217,14 @@ function resetRecommendationView() {
 
 function loadingProcessMarkup() {
   const active = state.loadingStage;
+  const flowProgress = state.loadingDone
+    ? 100
+    : Math.round((active / Math.max(1, loadingSteps.length - 1)) * 100);
   const rows = loadingSteps.map((step, index) => {
     const status = state.loadingDone || index < active ? "complete" : index === active ? "active" : "pending";
     const label = status === "complete" ? "Done" : status === "active" ? "Running" : "Queued";
     return `
-      <article class="process-step ${status}">
+      <article class="process-step ${status}" style="--step-index: ${index}">
         <div class="process-marker">${status === "complete" ? "✓" : index + 1}</div>
         <div class="process-copy">
           <div class="process-step-header">
@@ -246,8 +249,34 @@ function loadingProcessMarkup() {
         </div>
         <span>${Math.min(active + 1, loadingSteps.length)}/${loadingSteps.length}</span>
       </div>
-      <div class="process-steps">${rows}</div>
+      <div class="process-steps" style="--flow-progress: ${flowProgress}%">${rows}</div>
     </section>
+  `;
+}
+
+function loadingBuildGridMarkup() {
+  const active = state.loadingStage;
+  const tiles = [
+    ["01", "Read", "Starter item"],
+    ["02", "Map", "Event intent"],
+    ["03", "Match", "Catalog search"],
+    ["04", "Check", "Basket fit"]
+  ].map(([number, title, detail], index) => {
+    const status = state.loadingDone || index < Math.min(active, 4) ? "complete" : index === Math.min(active, 3) ? "active" : "pending";
+    return `
+      <article class="build-tile ${status}" style="--tile-index: ${index}">
+        <span>${number}</span>
+        <strong>${title}</strong>
+        <small>${detail}</small>
+      </article>
+    `;
+  }).join("");
+
+  return `
+    <div class="look-build-grid" aria-label="Outfit build preview">
+      <div class="build-flow-line" style="--build-progress: ${state.loadingDone ? 100 : Math.min(active, 3) * 33.33}%"></div>
+      ${tiles}
+    </div>
   `;
 }
 
@@ -268,17 +297,20 @@ function renderChat() {
   const hasRecommendation = Boolean(state.latest?.outfit?.length);
   const hasOpenAI = Boolean(state.bootstrap?.hasOpenAI);
   els.chatBlock.hidden = false;
-  els.quickPrompts.hidden = state.isGenerating || !hasRecommendation;
-  els.chatForm.hidden = state.isGenerating;
+  els.quickPrompts.hidden = state.isGenerating || !hasRecommendation || !hasOpenAI;
+  els.chatForm.hidden = state.isGenerating || !hasRecommendation || !hasOpenAI;
   els.chatInput.disabled = !hasRecommendation || !hasOpenAI || state.chat.isBusy || state.isGenerating;
   els.chatForm.querySelector("button").disabled = !hasRecommendation || !hasOpenAI || state.chat.isBusy || state.isGenerating;
 
   if (state.isGenerating) {
     els.chatMessages.innerHTML = `
-      <div class="chat-message from-agent">I’m building the basket now. I’ll show products only after the final guardrail review confirms the outfit and explanation are sound.</div>
+      <div class="chat-message from-agent">Building the basket. Each stage hands off to the next before the final outfit appears.</div>
       ${loadingProcessMarkup()}
     `;
-    els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+    const activeStep = els.chatMessages.querySelector(".process-step.active");
+    if (activeStep) {
+      els.chatMessages.scrollTop = Math.max(0, activeStep.offsetTop - (els.chatMessages.clientHeight / 2) + (activeStep.clientHeight / 2));
+    }
     return;
   }
 
@@ -339,7 +371,7 @@ function renderIdleState() {
   els.analysisStrip.innerHTML = `
     <div>
       <p class="eyebrow">Ready when you are</p>
-      <p><strong>Choose a starter item and constraints, then press Generate outfit.</strong> Nothing will run until you start the recommendation.</p>
+      <p><strong>Select a starter item, set the occasion, then generate the full look.</strong> The recommendation run starts only when you press the button.</p>
     </div>
     <div class="analysis-tags">
       <span>${hasOpenAI ? "OpenAI" : "Fallback"}</span>
@@ -368,7 +400,7 @@ function renderLoadingProcess() {
   els.analysisStrip.innerHTML = `
     <div>
       <p class="eyebrow">Stylist working</p>
-      <p><strong>Building a verified, shoppable outfit.</strong> Follow the live process in the assistant panel.</p>
+      <p><strong>Building a verified, shoppable outfit.</strong> The live process is moving through the assistant rail.</p>
     </div>
     <div class="analysis-tags">
       <span>${hasOpenAI ? "OpenAI" : "Fallback"}</span>
@@ -377,8 +409,8 @@ function renderLoadingProcess() {
       <span>Guardrails</span>
     </div>
   `;
-  els.productGrid.classList.remove("is-process");
-  els.productGrid.innerHTML = `<div class="empty-state">Recommendations will appear here after the final AI guardrail review finishes.</div>`;
+  els.productGrid.classList.add("is-process");
+  els.productGrid.innerHTML = loadingBuildGridMarkup();
   els.kpiGrid.replaceChildren();
   els.insightBlock.innerHTML = "";
   els.pipelineList.replaceChildren(...loadingSteps.map((step) => {
@@ -403,7 +435,7 @@ function startLoadingProcess() {
     state.loadingStage = Math.min(state.loadingStage + 1, loadingSteps.length - 1);
     renderLoadingProcess();
     if (state.loadingStage === loadingSteps.length - 1) clearLoadingTimer();
-  }, 1450);
+  }, 1650);
 }
 
 function finishLoadingProcess() {
@@ -416,13 +448,13 @@ function finishLoadingProcess() {
     .reduce((promise, index) => promise.then(() => {
       state.loadingStage = index;
       renderLoadingProcess();
-      return new Promise((resolve) => setTimeout(resolve, 260));
+      return new Promise((resolve) => setTimeout(resolve, 420));
     }), Promise.resolve())
     .then(() => {
       state.loadingStage = loadingSteps.length - 1;
       state.loadingDone = true;
       renderLoadingProcess();
-      return new Promise((resolve) => setTimeout(resolve, 650));
+      return new Promise((resolve) => setTimeout(resolve, 780));
     });
 }
 
