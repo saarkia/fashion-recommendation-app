@@ -927,7 +927,8 @@ async function generateBusinessCopy({ reference, event, style, store, urgency, o
     },
     {
       role: "user",
-      content: `Write customer-safe, demo-ready copy for this fashion outfit recommendation.
+      content: `Write shopper-safe, demo-ready copy for this fashion outfit recommendation.
+Address the shopper directly as "you". Do not write "the customer uploaded"; write phrases like "it looks like you uploaded" or "you started with".
 
 Starter item: ${reference.productDisplayName}
 Starter image analysis: ${analysis.color} ${analysis.item_type}; category ${analysis.category}; usage ${analysis.usage}; season ${analysis.season}
@@ -947,7 +948,7 @@ ${substitutions.slice(0, 4).map((product) => `- for id ${product.forProductId}: 
 
 Return JSON:
 {
-  "introLines": ["one sentence describing what the customer uploaded", "one sentence explaining the recommendation strategy"],
+  "introLines": ["one sentence speaking directly to the shopper about what they uploaded or selected", "one sentence explaining the recommendation strategy in direct address"],
   "demandInsight": "one sentence about what the recommendation app learns from this request",
   "associatePrompt": "one short SMS/clienteling-style message an associate could send",
   "itemReasons": {
@@ -983,7 +984,8 @@ async function reviewOutfitWithOpenAI({ reference, event, style, store, urgency,
       type: "text",
       text: `You are the final stylist QA pass for a fashion recommendation system.
 
-Review the uploaded/starter item, the actual retrieved catalog recommendations, and the customer-facing explanation. The customer already owns or likes the starter item, so the goal is to complete the outfit, not replace the starter item.
+Review the uploaded/starter item, the actual retrieved catalog recommendations, and the shopper-facing explanation. The shopper already owns or likes the starter item, so the goal is to complete the outfit, not replace the starter item.
+Any shopper-visible copy must address the shopper directly as "you". Do not write "the customer uploaded"; write phrases like "it looks like you uploaded" or "you started with".
 
 This is the final AI guardrail pass. Verify:
 - Does this outfit actually work for the starter item, event, style, budget, and availability?
@@ -1006,8 +1008,8 @@ ${outfit.map((product, index) => `- Image ${index + 2} is product id ${product.i
 Return JSON:
 {
   "introLines": [
-    "specific sentence describing what the customer uploaded",
-    "specific sentence explaining the recommendation strategy"
+    "specific sentence speaking directly to the shopper about what they uploaded or selected",
+    "specific sentence explaining the recommendation strategy in direct address"
   ],
   "outfitRationale": "2 short sentences explaining the guardrail verdict: whether this set works as a basket and whether the explanation is faithful, including any tradeoff if the catalog is limited",
   "itemReasons": {

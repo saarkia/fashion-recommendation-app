@@ -81,9 +81,11 @@ const loadingSteps = [
   {
     title: "Verifying the recommendation",
     service: "OpenAI final guardrail review",
-    detail: "Checks that the outfit actually works and that the customer-facing explanation makes sense."
+    detail: "Checks that the outfit actually works and that the shopper-facing explanation makes sense."
   }
 ];
+
+const stylistAgentName = "Mira";
 
 function optionList(select, values) {
   select.replaceChildren(
@@ -114,6 +116,25 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function shopperFacingText(value) {
+  return String(value || "")
+    .replace(/\bcustomer-facing\b/gi, "shopper-facing")
+    .replace(/\bthe customer uploaded\b/g, "it looks like you uploaded")
+    .replace(/\bThe customer uploaded\b/g, "It looks like you uploaded")
+    .replace(/\bcustomer uploaded\b/g, "you uploaded")
+    .replace(/\bCustomer uploaded\b/g, "You uploaded")
+    .replace(/\bthe customer\b/g, "you")
+    .replace(/\bThe customer\b/g, "You")
+    .replace(/\bcustomer's\b/g, "your")
+    .replace(/\bCustomer's\b/g, "Your")
+    .replace(/\bcustomer\b/g, "you")
+    .replace(/\bCustomer\b/g, "You")
+    .replace(/\bThe recommendations focus on\b/g, "I focused on")
+    .replace(/\bthe recommendations focus on\b/g, "I focused on")
+    .replace(/\bRecommendations are selected\b/g, "I selected recommendations")
+    .replace(/\brecommendations are selected\b/g, "I selected recommendations");
 }
 
 function renderInspiration() {
@@ -286,8 +307,8 @@ function recommendationChatIntro(data) {
     .map((product) => `${product.role}: ${product.productDisplayName}`)
     .join("; ");
   return [
-    "Hi, I'm your OpenAI stylist assistant. I'll keep the recommendation grounded in the catalog, budget, and store availability.",
-    intro[0] || `I built this around ${data.analysis?.item || "the starter item"} for ${String(data.event || "your event").toLowerCase()}.`,
+    `Hi, I'm ${stylistAgentName}, RetailNEXT's fashion agent powered by OpenAI. I'll keep your recommendation grounded in the catalog, budget, and store availability.`,
+    shopperFacingText(intro[0]) || `I built this around ${data.analysis?.item || "the starter item"} for ${String(data.event || "your event").toLowerCase()}.`,
     products ? `I found ${data.outfit.length} shoppable pieces: ${products}. Ask me to make it cheaper, more formal, or swap a specific item.` : ""
   ].filter(Boolean).join("\n\n");
 }
@@ -320,7 +341,7 @@ function renderChat() {
 
   const messages = state.chat.history.map((entry) => `
     <div class="chat-message ${entry.role === "user" ? "from-user" : "from-agent"}">
-      ${escapeHtml(entry.content)}
+      ${escapeHtml(entry.role === "assistant" ? shopperFacingText(entry.content) : entry.content)}
     </div>
   `);
 
@@ -420,6 +441,13 @@ function renderLoadingProcess() {
   renderChat();
 }
 
+function scrollToProgress() {
+  const target = window.matchMedia("(max-width: 1120px)").matches ? els.chatBlock : els.analysisStrip;
+  window.setTimeout(() => {
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 80);
+}
+
 function startLoadingProcess() {
   clearLoadingTimer();
   state.latest = null;
@@ -430,6 +458,7 @@ function startLoadingProcess() {
   setGenerateButtonState(true);
   renderChat();
   renderLoadingProcess();
+  scrollToProgress();
   state.loadingTimer = setInterval(() => {
     state.loadingStage = Math.min(state.loadingStage + 1, loadingSteps.length - 1);
     renderLoadingProcess();
@@ -475,21 +504,22 @@ function renderResult(data, options = {}) {
     ? `OpenAI is live for ${[
         data.ai.imageAnalysis === "openai" ? "vision analysis" : null,
         data.ai.queryEmbeddings === "openai" ? "query embeddings" : null,
-        data.ai.copyGeneration === "openai" ? "customer explanation" : null,
+        data.ai.copyGeneration === "openai" ? "shopper explanation" : null,
         data.ai.recommendationReview === "openai" ? "final guardrail review" : null
       ].filter(Boolean).join(", ")}.`
     : "Using local fallback metadata and retrieval logic.";
   const introLines = data.analysis.introLines?.length
-    ? data.analysis.introLines
+    ? data.analysis.introLines.map(shopperFacingText)
     : [
         `${data.analysis.item} was interpreted as a ${String(attrs.color).toLowerCase()} ${String(attrs.item_type).toLowerCase()}.`,
         `Recommendations are selected to complete the outfit for ${data.event.toLowerCase()}, not replace the starter item.`
-      ];
+      ].map(shopperFacingText);
+  const outfitRationale = shopperFacingText(data.analysis.outfitRationale);
   els.analysisStrip.innerHTML = `
     <div>
       <p class="eyebrow">AI stylist readout</p>
       <p><strong>${escapeHtml(introLines[0])}</strong> ${escapeHtml(introLines[1])}</p>
-      ${data.analysis.outfitRationale ? `<p class="ai-review">${escapeHtml(data.analysis.outfitRationale)}</p>` : ""}
+      ${outfitRationale ? `<p class="ai-review">${escapeHtml(outfitRationale)}</p>` : ""}
       <p class="ai-detail">${escapeHtml(aiSummary)}</p>
     </div>
     <div class="analysis-tags">
