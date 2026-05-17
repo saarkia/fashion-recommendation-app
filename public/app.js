@@ -22,6 +22,7 @@ const state = {
     previewChangedProductIds: [],
     suggestedPrompts: [],
     pendingEmail: false,
+    busyMessage: "",
     isBusy: false
   }
 };
@@ -238,6 +239,7 @@ function resetChat() {
     previewChangedProductIds: [],
     suggestedPrompts: [],
     pendingEmail: false,
+    busyMessage: "",
     isBusy: false
   };
   state.changedProductIds = [];
@@ -403,7 +405,7 @@ function renderChat() {
   }
 
   if (state.chat.isBusy) {
-    messages.push(`<div class="chat-message from-agent">Checking the catalog, store stock, and styling constraints...</div>`);
+    messages.push(`<div class="chat-message from-agent">${escapeHtml(state.chat.busyMessage || "Checking the catalog, store stock, and styling constraints...")}</div>`);
   }
 
   els.chatMessages.innerHTML = messages.join("") || `<div class="chat-empty">Generate an outfit, then I'll explain the recommendation and help refine it like a store stylist.</div>`;
@@ -686,6 +688,12 @@ async function sendChatMessage(message) {
   state.chat.previewSwap = null;
   state.chat.previewChangedProductIds = [];
   state.chat.history.push({ role: "user", content: trimmed });
+  if (wantsEmail) {
+    state.chat.suggestedPrompts = state.chat.suggestedPrompts.filter((prompt) => !isEmailIntent(prompt));
+    state.chat.busyMessage = emailAddress ? "Sending your outfit email now..." : "";
+  } else {
+    state.chat.busyMessage = "";
+  }
 
   if (!state.latest?.outfit?.length) {
     state.chat.history.push({
@@ -743,6 +751,7 @@ async function sendChatMessage(message) {
     state.chat.history.push({ role: "assistant", content: wantsEmail ? `I could not send the email yet: ${error.message}. I kept your basket unchanged.` : `I could not complete that refinement: ${error.message}` });
   } finally {
     state.chat.isBusy = false;
+    state.chat.busyMessage = "";
     renderChat();
   }
 }
