@@ -282,14 +282,13 @@ function loadingBuildGridMarkup() {
 
 function recommendationChatIntro(data) {
   const intro = data.analysis?.introLines || [];
-  const rationale = data.analysis?.outfitRationale || "";
   const products = (data.outfit || [])
     .map((product) => `${product.role}: ${product.productDisplayName}`)
     .join("; ");
   return [
-    intro.join(" "),
-    rationale,
-    products ? `I found ${data.outfit.length} shoppable pieces: ${products}.` : ""
+    "Hi, I'm your OpenAI stylist assistant. I'll keep the recommendation grounded in the catalog, budget, and store availability.",
+    intro[0] || `I built this around ${data.analysis?.item || "the starter item"} for ${String(data.event || "your event").toLowerCase()}.`,
+    products ? `I found ${data.outfit.length} shoppable pieces: ${products}. Ask me to make it cheaper, more formal, or swap a specific item.` : ""
   ].filter(Boolean).join("\n\n");
 }
 
@@ -304,7 +303,7 @@ function renderChat() {
 
   if (state.isGenerating) {
     els.chatMessages.innerHTML = `
-      <div class="chat-message from-agent">Building the basket. Each stage hands off to the next before the final outfit appears.</div>
+      <div class="chat-message from-agent">I'm reading the starter item, searching the catalog, and checking store availability before I show the outfit.</div>
       ${loadingProcessMarkup()}
     `;
     const activeStep = els.chatMessages.querySelector(".process-step.active");
@@ -315,7 +314,7 @@ function renderChat() {
   }
 
   if (!hasOpenAI) {
-    els.chatMessages.innerHTML = `<div class="chat-empty">OpenAI API key required for agentic chat refinement.</div>`;
+    els.chatMessages.innerHTML = `<div class="chat-empty">OpenAI-powered chat refinement is unavailable in this environment, but the outfit recommendation still works with local fallback logic.</div>`;
     return;
   }
 
@@ -342,10 +341,10 @@ function renderChat() {
   }
 
   if (state.chat.isBusy) {
-    messages.push(`<div class="chat-message from-agent">Checking the catalog and styling constraints...</div>`);
+    messages.push(`<div class="chat-message from-agent">Checking the catalog, store stock, and styling constraints...</div>`);
   }
 
-  els.chatMessages.innerHTML = messages.join("") || `<div class="chat-empty">Generate an outfit, then I’ll explain the recommendation and help refine it.</div>`;
+  els.chatMessages.innerHTML = messages.join("") || `<div class="chat-empty">Generate an outfit, then I'll explain the recommendation and help refine it like a store stylist.</div>`;
   els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
 }
 
@@ -410,7 +409,7 @@ function renderLoadingProcess() {
     </div>
   `;
   els.productGrid.classList.add("is-process");
-  els.productGrid.innerHTML = loadingBuildGridMarkup();
+  els.productGrid.innerHTML = `<div class="empty-state loading-note">The OpenAI stylist assistant is building the recommendation. Follow the live progress in the assistant panel.</div>`;
   els.kpiGrid.replaceChildren();
   els.insightBlock.innerHTML = "";
   els.pipelineList.replaceChildren(...loadingSteps.map((step) => {
