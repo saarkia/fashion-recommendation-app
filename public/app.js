@@ -313,7 +313,7 @@ function recommendationChatIntro(data) {
   return [
     `Hi, I'm ${stylistAgentName}, RetailNEXT's fashion agent powered by OpenAI. I'll keep your recommendation grounded in the catalog, budget, and store availability.`,
     shopperFacingText(intro[0]) || `I built this around ${data.analysis?.item || "the starter item"} for ${String(data.event || "your event").toLowerCase()}.`,
-    products ? `I found ${data.outfit.length} shoppable pieces: ${products}. Ask me to make it cheaper, more formal, or swap a specific item.` : ""
+    products ? `I found ${data.outfit.length} shoppable pieces: ${products}. Try one of my suggested prompts below, or ask me for a specific change.` : ""
   ].filter(Boolean).join("\n\n");
 }
 
