@@ -2,7 +2,6 @@ import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { createReadStream, existsSync } from "node:fs";
 import { extname, join, normalize, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import { fileURLToPath } from "node:url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
@@ -34,51 +33,6 @@ const topArticleTypes = new Set(["Shirts", "Tshirts", "Tops", "Kurtas"]);
 const bottomArticleTypes = new Set(["Jeans", "Trousers", "Shorts", "Skirts", "Patiala", "Track Pants", "Rain Trousers"]);
 const shoeArticleTypes = new Set(["Casual Shoes", "Sports Shoes", "Formal Shoes", "Heels", "Flats", "Sandals", "Flip Flops"]);
 const dressArticleTypes = new Set(["Dresses", "Sarees", "Night suits"]);
-const formalUsageRank = { Sports: 0, Casual: 1, "Smart Casual": 2, Ethnic: 3, Formal: 4 };
-const formalityOptions = ["casual", "smart_casual", "semi_formal", "formal", "black_tie"];
-
-const recommendationIntentJsonSchema = {
-  name: "retail_recommendation_intent",
-  strict: true,
-  schema: {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      occasion: { type: "string" },
-      formality: { type: "string", enum: formalityOptions },
-      style_direction: { type: "array", items: { type: "string" } },
-      colour_palette: { type: "array", items: { type: "string" } },
-      budget_max: { type: "number" },
-      urgency: { type: "string", enum: ["available_today", "ship_or_transfer"] },
-      store: { type: "string" },
-      required_slots: { type: "array", items: { type: "string" } },
-      starter_item_analysis: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          item_type: { type: "string" },
-          colours: { type: "array", items: { type: "string" } },
-          materials: { type: "array", items: { type: "string" } },
-          style_notes: { type: "array", items: { type: "string" } }
-        },
-        required: ["item_type", "colours", "materials", "style_notes"]
-      },
-      constraints: { type: "array", items: { type: "string" } }
-    },
-    required: [
-      "occasion",
-      "formality",
-      "style_direction",
-      "colour_palette",
-      "budget_max",
-      "urgency",
-      "store",
-      "required_slots",
-      "starter_item_analysis",
-      "constraints"
-    ]
-  }
-};
 
 const events = {
   "outdoor-spring-wedding": {
@@ -250,7 +204,6 @@ async function openaiFetch(path, body) {
 }
 
 async function chatJson(messages, maxTokens = 700) {
-  // Structured Outputs fallback path: JSON mode keeps model responses machine-readable when a full schema is not needed.
   const payload = await openaiFetch("/chat/completions", {
     model: OPENAI_MODEL,
     messages,
@@ -261,23 +214,7 @@ async function chatJson(messages, maxTokens = 700) {
   return cleanJson(payload.choices?.[0]?.message?.content || "{}");
 }
 
-async function chatJsonSchema(messages, jsonSchema, maxTokens = 700) {
-  // Structured Outputs: turns vague shopper intent into a schema-valid retail intent object the app can safely route.
-  const payload = await openaiFetch("/chat/completions", {
-    model: OPENAI_MODEL,
-    messages,
-    response_format: {
-      type: "json_schema",
-      json_schema: jsonSchema
-    },
-    temperature: 0.2,
-    max_tokens: maxTokens
-  });
-  return cleanJson(payload.choices?.[0]?.message?.content || "{}");
-}
-
 async function responseWithTools(input, tools, maxOutputTokens = 900) {
-  // Tool-calling style action schema: the model chooses safe basket operations; application code applies them.
   const payload = await openaiFetch("/responses", {
     model: OPENAI_MODEL,
     input,
@@ -290,7 +227,6 @@ async function responseWithTools(input, tools, maxOutputTokens = 900) {
 }
 
 async function getOpenAIEmbeddings(inputs) {
-  // Embeddings: semantically retrieves relevant catalog items while SKUs still come only from RetailNext data.
   const payload = await openaiFetch("/embeddings", {
     model: OPENAI_EMBEDDING_MODEL,
     input: inputs
@@ -312,7 +248,6 @@ async function imageForReview(product) {
 async function analyzeReferenceWithOpenAI(reference, event, style, imageDataUrl) {
   const dataUrl = imageDataUrl || await encodeProductImage(reference);
   const roleList = event.roleTargets.map((slot) => slot.role).join(", ");
-  // Vision / multimodal input: extracts visual attributes from uploaded clothing images and starter products.
   const output = await chatJson([
     {
       role: "system",
@@ -388,149 +323,6 @@ function localAnalysis(reference, event, style) {
   };
 }
 
-function normalizeUrgency(urgency) {
-  return urgency === "network" || urgency === "ship_or_transfer" ? "ship_or_transfer" : "available_today";
-}
-
-function storeUrgencyFromIntent(intentUrgency) {
-  return intentUrgency === "ship_or_transfer" ? "network" : "today";
-}
-
-function inferFormality(event, style, analysis) {
-  const usages = [analysis.usage, ...(event.usages || []), ...(style.usages || [])].filter(Boolean);
-  const maxRank = usages.reduce((rank, usage) => Math.max(rank, formalUsageRank[usage] ?? 1), 1);
-  if (/black tie|gala|evening/i.test(`${event.label} ${event.intent}`)) return "black_tie";
-  if (maxRank >= 4) return "formal";
-  if (maxRank >= 3) return "semi_formal";
-  if (maxRank >= 2) return "smart_casual";
-  return "casual";
-}
-
-function slotDisplayName(slot) {
-  const role = String(slot.role || "item").replace(/\s*\/\s*/g, " / ");
-  if (/shoe/i.test(role)) return "Shoes";
-  if (/bottom/i.test(role)) return "Bottom";
-  if (/layer|overshirt/i.test(role)) return "Layer";
-  if (/top/i.test(role)) return "Top";
-  if (/statement|party|dress|one-piece/i.test(role)) return "Statement piece";
-  return role.replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-function localShoppingIntent({ event, style, store, budgetMax, urgency, analysis, slots }) {
-  const palette = [
-    analysis.color,
-    ...event.colours.slice(0, 4),
-    ...style.colours.slice(0, 3)
-  ].filter(Boolean);
-  return {
-    occasion: event.label,
-    formality: inferFormality(event, style, analysis),
-    style_direction: [style.label, ...(analysis.style_notes || [])].filter(Boolean).slice(0, 5),
-    colour_palette: [...new Set(palette)].slice(0, 6),
-    budget_max: Number(budgetMax),
-    urgency: normalizeUrgency(urgency),
-    store,
-    required_slots: slots.map(slotDisplayName),
-    starter_item_analysis: {
-      item_type: analysis.item_type || "Clothing",
-      colours: [analysis.color || "Neutral"].filter(Boolean),
-      materials: [],
-      style_notes: (analysis.style_notes || []).slice(0, 5)
-    },
-    constraints: [
-      `Total basket must stay under $${budgetMax}.`,
-      normalizeUrgency(urgency) === "available_today" ? `Only present items as available today when stock exists at ${store}.` : "Ship or transfer items may use network stock.",
-      "Do not recommend a near-duplicate of the starter item.",
-      ...(event.avoidColours || []).map((colour) => `Avoid ${colour} where possible.`)
-    ]
-  };
-}
-
-function coerceShoppingIntent(output, fallback) {
-  const requiredSlots = Array.isArray(output.required_slots) && output.required_slots.length
-    ? output.required_slots
-    : fallback.required_slots;
-  const formality = formalityOptions.includes(output.formality) ? output.formality : fallback.formality;
-  return {
-    occasion: String(output.occasion || fallback.occasion),
-    formality,
-    style_direction: Array.isArray(output.style_direction) && output.style_direction.length ? output.style_direction.slice(0, 6).map(String) : fallback.style_direction,
-    colour_palette: Array.isArray(output.colour_palette) && output.colour_palette.length ? output.colour_palette.slice(0, 8).map(String) : fallback.colour_palette,
-    budget_max: Number(output.budget_max || fallback.budget_max),
-    urgency: output.urgency === "ship_or_transfer" ? "ship_or_transfer" : "available_today",
-    store: String(output.store || fallback.store),
-    required_slots: requiredSlots.slice(0, 6).map(String),
-    starter_item_analysis: {
-      item_type: String(output.starter_item_analysis?.item_type || fallback.starter_item_analysis.item_type),
-      colours: Array.isArray(output.starter_item_analysis?.colours) ? output.starter_item_analysis.colours.slice(0, 6).map(String) : fallback.starter_item_analysis.colours,
-      materials: Array.isArray(output.starter_item_analysis?.materials) ? output.starter_item_analysis.materials.slice(0, 6).map(String) : fallback.starter_item_analysis.materials,
-      style_notes: Array.isArray(output.starter_item_analysis?.style_notes) ? output.starter_item_analysis.style_notes.slice(0, 6).map(String) : fallback.starter_item_analysis.style_notes
-    },
-    constraints: Array.isArray(output.constraints) && output.constraints.length ? output.constraints.slice(0, 8).map(String) : fallback.constraints
-  };
-}
-
-async function interpretShoppingIntentWithOpenAI({ event, style, store, budgetMax, urgency, analysis, slots, reference }) {
-  const fallback = localShoppingIntent({ event, style, store, budgetMax, urgency, analysis, slots });
-  if (!OPENAI_API_KEY) return { intent: fallback, source: "local" };
-
-  const output = await chatJsonSchema([
-    {
-      role: "system",
-      content: "You convert messy retail styling requests into strict JSON for a deterministic recommendation engine. Return only schema-valid JSON."
-    },
-    {
-      role: "user",
-      content: `Interpret this shopping mission for RetailNext.
-
-Occasion option: ${event.label}
-Occasion intent: ${event.intent}
-Style preference selected: ${style.label}
-Selected store: ${store}
-Budget max: ${budgetMax}
-Urgency: ${normalizeUrgency(urgency)}
-Starter item: ${reference.productDisplayName}
-Starter analysis: ${JSON.stringify(analysis)}
-Application-generated required slots: ${slots.map(slotDisplayName).join(", ")}
-
-Make the output useful for retrieval and retail rule enforcement. Keep budget, store, and urgency exactly aligned to the shopper controls.`
-    }
-  ], recommendationIntentJsonSchema, 900);
-
-  return { intent: coerceShoppingIntent(output, fallback), source: "openai" };
-}
-
-function slotFromIntentName(name, role = name) {
-  const text = String(name || "").toLowerCase();
-  if (/(shoe|heel|flat|sandal|footwear|sneaker)/.test(text)) {
-    return { role, subCategories: ["Shoes", "Sandal", "Flip Flops"], articleTypes: ["Formal Shoes", "Casual Shoes", "Sports Shoes", "Heels", "Flats", "Sandals", "Flip Flops"] };
-  }
-  if (/(bottom|trouser|pant|jean|skirt|short)/.test(text)) {
-    return { role, subCategories: ["Bottomwear"], articleTypes: ["Trousers", "Jeans", "Shorts", "Skirts", "Rain Trousers", "Patiala"] };
-  }
-  if (/(layer|jacket|overshirt|cover|cardigan)/.test(text)) {
-    return { role, subCategories: ["Topwear"], articleTypes: ["Shirts", "Kurtas", "Tops"], allowSameGroup: true, disallowArticleTypes: ["Tshirts"] };
-  }
-  if (/(dress|statement|one[- ]?piece|saree|party)/.test(text)) {
-    return { role, subCategories: ["Dress", "Saree"], articleTypes: ["Dresses", "Sarees", "Tops", "Shirts", "Kurtas"] };
-  }
-  if (/(top|shirt|blouse|tee|kurta)/.test(text)) {
-    return { role, subCategories: ["Topwear"], articleTypes: ["Shirts", "Tops", "Kurtas"] };
-  }
-  return null;
-}
-
-function slotsFromIntent(intent, event, analysis, fallbackSlots) {
-  const converted = (intent.required_slots || [])
-    .map((name) => slotFromIntentName(name, name))
-    .filter(Boolean);
-  const slots = uniqueSlots(converted.length ? converted : fallbackSlots);
-  const starter = starterGroup(analysis);
-  return slots
-    .filter((slot) => slotGroup(slot) !== starter || slot.allowSameGroup)
-    .slice(0, 4);
-}
-
 function displayStarterName(analysis) {
   const color = analysis.color && analysis.color !== "Neutral" ? `${analysis.color} ` : "";
   return `Uploaded ${color}${analysis.item_type || "clothing item"}`.replace(/\s+/g, " ").trim();
@@ -581,18 +373,9 @@ async function buildReferenceVector(reference, analysis, event, style, gender) {
   return averageVector(exemplars);
 }
 
-function searchForRole(analysis, slot, event, style, intent) {
+function searchForRole(analysis, slot, event, style) {
   const aiSuggestion = analysis.suggested_searches.find((item) => item.role === slot.role);
-  const intentTerms = intent
-    ? [
-        intent.occasion,
-        intent.formality?.replaceAll("_", " "),
-        ...(intent.style_direction || []).slice(0, 3),
-        ...(intent.colour_palette || []).slice(0, 4),
-        ...(intent.constraints || []).slice(0, 2)
-      ].filter(Boolean).join(" ")
-    : `${style.label} ${event.label}`;
-  return aiSuggestion?.query || `${slot.role} ${intentTerms}`;
+  return aiSuggestion?.query || `${style.label} ${slot.role} for ${event.label}`;
 }
 
 function clamp(value, min = 0, max = 1) {
@@ -747,7 +530,7 @@ function buildEventQueryVector(event, style, gender, slot) {
 }
 
 function candidateScore(product, context) {
-  const { reference, referenceVector, eventVector, event, style, store, urgency, budgetMax, intent } = context;
+  const { reference, referenceVector, eventVector, event, style, store, urgency, budgetMax } = context;
   const vector = getVector(product.index);
   const semanticToEvent = (dot(eventVector, vector) + 1) / 2;
   const semanticToReference = (dot(referenceVector, vector) + 1) / 2;
@@ -756,12 +539,6 @@ function candidateScore(product, context) {
   const colourFit = colourHarmony(reference, product);
   const priceFit = product.price <= budgetMax ? 1 : Math.max(0, 1 - (product.price - budgetMax) / budgetMax);
   const trendFit = product.trendScore / 100;
-  const intentPaletteFit = intent?.colour_palette?.includes(product.baseColour) ? 0.04 : 0;
-  const intentFormalityFit = intent?.formality === "formal" && product.usage === "Formal"
-    ? 0.04
-    : intent?.formality === "smart_casual" && product.usage === "Smart Casual"
-      ? 0.03
-      : 0;
 
   return (
     semanticToEvent * 0.28 +
@@ -770,9 +547,7 @@ function candidateScore(product, context) {
     semanticToReference * 0.12 +
     colourFit * 0.1 +
     priceFit * 0.05 +
-    trendFit * 0.03 +
-    intentPaletteFit +
-    intentFormalityFit
+    trendFit * 0.03
   );
 }
 
@@ -890,66 +665,6 @@ function inferChatIntent(message, recommendation, chatState = {}) {
   };
 }
 
-function targetSlotFromProduct(product, fallbackRole) {
-  if (!product) return fallbackRole || "basket";
-  const group = productGroup(product.articleType, product.subCategory);
-  if (group === "shoe") return "shoes";
-  if (group === "bottom") return "bottom";
-  if (group === "top") return /layer|overshirt/i.test(product.role || "") ? "layer" : "top";
-  if (group === "one-piece") return "one_piece";
-  return fallbackRole || product.role || "item";
-}
-
-function structuredBasketAction({ message, recommendation, inferred, toolCall }) {
-  const text = String(message || "").toLowerCase();
-  const outfit = recommendation?.outfit || [];
-  const target = outfit.find((product) => product.id === Number(toolCall?.arguments?.targetProductId || inferred.targetProductId));
-  const goal = String(toolCall?.arguments?.goal || inferred.goal || "");
-  const wantsToday = recommendation?.urgency === "today" || /\b(today|available|pickup|in store)\b/i.test(`${message} ${goal}`);
-  if (/\b(cheaper|lower|budget|less expensive|price)\b/.test(text)) {
-    const current = recommendation?.business?.basketValue || outfit.reduce((sum, product) => sum + product.price, 0);
-    return {
-      action: "reduce_budget",
-      target: "basket",
-      constraint: {
-        max_total_price: Math.max(100, Math.round(current * 0.9))
-      },
-      display: `reduce_budget -> basket -> under $${Math.max(100, Math.round(current * 0.9))}`
-    };
-  }
-  if (/\b(formal|polished|professional|dressier|elevated)\b/.test(text)) {
-    return {
-      action: "adjust_style",
-      target: "basket",
-      constraints: {
-        formality: "formal"
-      },
-      display: "adjust_style -> basket -> formal"
-    };
-  }
-  if (toolCall?.name === "find_alternatives" || inferred.wantsChange) {
-    const targetSlot = targetSlotFromProduct(target, toolCall?.arguments?.targetRole || inferred.targetRole);
-    return {
-      action: "swap_item",
-      target_slot: targetSlot,
-      constraints: {
-        preserve_formality: true,
-        available_today: wantsToday,
-        lower_or_equal_price: /\b(cheaper|lower|budget|less expensive|price)\b/i.test(`${message} ${goal}`)
-      },
-      display: `swap_item -> ${targetSlot} -> ${wantsToday ? "available today" : "grounded alternative"}`
-    };
-  }
-  return {
-    action: "explain_basket",
-    target: "basket",
-    constraints: {
-      grounded_in_catalog: true
-    },
-    display: "explain_basket -> basket -> grounded rationale"
-  };
-}
-
 function parseFunctionCalls(payload) {
   return (payload?.output || [])
     .filter((item) => item?.type === "function_call")
@@ -1032,7 +747,7 @@ async function findAlternativeProducts({ recommendation, chatState, args, messag
     .filter((product) => today ? (product.inventory[store] || 0) > 0 : Object.values(product.inventory).some((qty) => qty > 0))
     .filter((product) => cheaper ? product.price < target.price : product.price <= Math.max(target.price + 120, 180))
     .map((product) => {
-      let score = candidateScore(product, { reference, referenceVector, eventVector, event, style, store, urgency, budgetMax, intent: recommendation.structuredIntent });
+      let score = candidateScore(product, { reference, referenceVector, eventVector, event, style, store, urgency, budgetMax });
       if (formal && product.usage === "Formal") score += 0.16;
       if (formal && product.usage === "Casual") score -= 0.08;
       if (casual && ["Casual", "Sports"].includes(product.usage)) score += 0.16;
@@ -1059,8 +774,6 @@ async function findAlternativeProducts({ recommendation, chatState, args, messag
 function substitutionsForOutfit({ outfit, reference, event, style, store, urgency }) {
   const selected = new Set(outfit.map((product) => product.id));
   return outfit.flatMap((product) => {
-    const localStock = product.inventory[store] || 0;
-    if (localStock > 2) return [];
     const slot = roleSlotForProduct(product, product.role);
     const eventVector = buildEventQueryVector(event, style, product.gender || reference.gender, slot);
     const referenceVector = Number.isInteger(reference.index) ? getVector(reference.index) : eventVector;
@@ -1074,7 +787,6 @@ function substitutionsForOutfit({ outfit, reference, event, style, store, urgenc
         fit: guardrail(reference, candidate, event, store, urgency)
       }))
       .filter((item) => item.fit.approved)
-      .filter((item) => (item.product.inventory[store] || 0) > localStock)
       .sort((a, b) => b.score - a.score)[0];
     if (!substitute) return [];
     return [{
@@ -1088,180 +800,6 @@ function substitutionsForOutfit({ outfit, reference, event, style, store, urgenc
   }).slice(0, 6);
 }
 
-function fallbackSubstitutionDetails({ substitutions, outfit, store, urgency }) {
-  return substitutions.map((substitute) => {
-    const original = outfit.find((product) => product.id === substitute.forProductId);
-    const originalStock = original?.inventory?.[store] || 0;
-    const failureReason = originalStock === 0
-      ? `Unavailable at ${store}${urgency === "today" ? " today" : ""}.`
-      : originalStock <= 2
-        ? `Only ${originalStock} left at ${store}, so it is a stock-risk item.`
-        : `Preferred slot needs a backup in case local stock changes.`;
-    const preservedConstraints = [
-      "style",
-      "formality",
-      "price",
-      urgency === "today" ? "availability today" : "network availability"
-    ];
-    return {
-      ...substitute,
-      originalItem: original?.productDisplayName || "Preferred item",
-      failureReason,
-      replacementItem: substitute.productDisplayName,
-      replacementRationale: `${substitute.productDisplayName} keeps the ${substitute.role || original?.role || "slot"} grounded in catalog stock and stays close to the original price point.`,
-      preservedConstraints,
-      explanation: `${original?.productDisplayName || "The preferred item"} is a stock risk because ${failureReason.toLowerCase()} ${substitute.productDisplayName} preserves ${preservedConstraints.slice(0, 3).join(", ")} and has ${substitute.inventory?.[store] || 0} available at ${store}.`
-    };
-  });
-}
-
-async function explainSubstitutionsWithOpenAI({ substitutions, outfit, event, style, store, urgency, intent }) {
-  const fallback = fallbackSubstitutionDetails({ substitutions, outfit, store, urgency });
-  if (!OPENAI_API_KEY || !fallback.length) return { substitutions: fallback, source: "local" };
-
-  try {
-    // Generation pass: explains deterministic inventory-aware substitutions in natural shopper language.
-    const output = await chatJson([
-      {
-        role: "system",
-        content: "You write concise substitution explanations for a department store stylist app. Return only valid JSON."
-      },
-      {
-        role: "user",
-        content: `Explain these substitutions. Do not invent inventory; use only the supplied stock values.
-
-Intent: ${JSON.stringify(intent)}
-Event: ${event.label}
-Style: ${style.label}
-Store: ${store}
-Urgency: ${urgency}
-
-Substitution data:
-${fallback.map((item, index) => `${index + 1}. Original: ${item.originalItem}; failure: ${item.failureReason}; replacement: ${item.replacementItem}; replacement stock ${item.inventory?.[store] || 0}; replacement article ${item.articleType}; colour ${item.baseColour}; price $${item.price}`).join("\n")}
-
-Return JSON:
-{
-  "items": [
-    {
-      "forProductId": 123,
-      "failureReason": "why the original or preferred slot failed",
-      "replacementRationale": "why the replacement is a good substitute",
-      "preservedConstraints": ["style", "formality", "colour", "price", "availability"],
-      "explanation": "one shopper-facing sentence"
-    }
-  ]
-}`
-      }
-    ], 900);
-    const items = Array.isArray(output.items) ? output.items : [];
-    return {
-      source: "openai",
-      substitutions: fallback.map((item) => {
-        const generated = items.find((entry) => Number(entry.forProductId) === Number(item.forProductId)) || {};
-        return {
-          ...item,
-          failureReason: generated.failureReason || item.failureReason,
-          replacementRationale: generated.replacementRationale || item.replacementRationale,
-          preservedConstraints: Array.isArray(generated.preservedConstraints) ? generated.preservedConstraints.slice(0, 6).map(String) : item.preservedConstraints,
-          explanation: generated.explanation || item.explanation
-        };
-      })
-    };
-  } catch {
-    return { substitutions: fallback, source: "local" };
-  }
-}
-
-function buildGroundingSummary({ grounding, outfit, substitutions, slots, store, budgetMax, urgency }) {
-  const basketValue = outfit.reduce((sum, product) => sum + product.price, 0);
-  const availableToday = outfit.filter((product) => (product.inventory[store] || 0) > 0).length;
-  return {
-    semanticCandidatesRetrieved: grounding.semanticCandidateIds.size,
-    passedStoreAvailability: grounding.storeCandidateIds.size,
-    passedBudgetFit: grounding.budgetCandidateIds.size,
-    passedUrgency: grounding.urgencyCandidateIds.size,
-    substitutionsNeeded: substitutions.length,
-    outfitCompleteness: {
-      complete: outfit.length,
-      required: slots.length,
-      label: `${outfit.length} / ${slots.length}`
-    },
-    basketValue,
-    budgetMax,
-    availableToday,
-    urgency: normalizeUrgency(urgency)
-  };
-}
-
-function detectAvailabilityGap(outfit, substitutions, event) {
-  const lowRisk = outfit
-    .filter((product) => substitutions.some((substitute) => substitute.forProductId === product.id))
-    .map((product) => productGroup(product.articleType, product.subCategory));
-  if (lowRisk.includes("shoe") || /shoe|footwear/i.test(event.insight)) return "formal shoes in selected store";
-  if (lowRisk.includes("top")) return "event-ready tops in selected store";
-  if (lowRisk.includes("bottom")) return "coordinating bottoms in selected store";
-  return "no severe local gap in the completed basket";
-}
-
-function buildBusinessSignals({ event, store, substitutions, grounding, outfit }) {
-  const gap = detectAvailabilityGap(outfit, substitutions, event);
-  const prevented = substitutions.length
-    ? "substitute found instead of dead-end journey"
-    : "complete basket found without local stock dead-end";
-  return {
-    demandSignal: `${event.label.toLowerCase()} looks`,
-    availabilityGap: gap,
-    potentialAction: gap === "no severe local gap in the completed basket"
-      ? `maintain current event assortment at ${store}`
-      : `transfer more ${gap} to ${store}`,
-    missedDemandPrevented: prevented,
-    executiveSummary: `RetailNext is seeing demand for ${event.label.toLowerCase()} outfits at ${store}. ${substitutions.length ? `This session was saved by ${substitutions.length} in-stock substitute${substitutions.length === 1 ? "" : "s"}.` : "The basket stayed complete against local inventory."} ${grounding.passedUrgency} grounded candidates passed urgency rules.`
-  };
-}
-
-function buildAssociateBriefFallback(recommendation) {
-  const intent = recommendation.structuredIntent || {};
-  const substitutions = recommendation.substitutions || [];
-  const availableToday = recommendation.business?.availableToday || 0;
-  const total = recommendation.business?.basketValue || 0;
-  const substitutionLine = substitutions.length
-    ? substitutions.slice(0, 2).map((item) => item.explanation || `${item.replacementItem || item.productDisplayName} preserves availability.`).join(" ")
-    : "No substitution is required in the current basket.";
-  return `Customer is shopping for a ${String(intent.formality || "").replaceAll("_", " ")} ${String(intent.occasion || recommendation.event).toLowerCase()} look, budget under $${intent.budget_max || total}. They prefer ${(intent.style_direction || [recommendation.style]).join(", ")} and started from ${intent.starter_item_analysis?.item_type || recommendation.reference?.productDisplayName}. Recommended look has ${recommendation.outfit?.length || 0} items, with ${availableToday}/${recommendation.outfit?.length || 0} available today at ${recommendation.store}. ${substitutionLine} Associate should lead with the anchor item, confirm the replacement choice, and reserve available pieces for pickup.`;
-}
-
-async function generateAssociateBrief(recommendation) {
-  const fallback = buildAssociateBriefFallback(recommendation);
-  if (!OPENAI_API_KEY) return { brief: fallback, source: "local" };
-  try {
-    // Generation pass: turns the final grounded outfit into an associate-facing handoff note.
-    const output = await chatJson([
-      { role: "system", content: "Return only valid JSON with a concise associateBrief string." },
-      {
-        role: "user",
-        content: `Create a store-associate handoff note from this grounded session.
-
-Structured intent:
-${JSON.stringify(recommendation.structuredIntent || {})}
-
-Outfit:
-${(recommendation.outfit || []).map((product) => `- ${product.role}: ${product.productDisplayName}; $${product.price}; ${product.inventory?.[recommendation.store] || 0} at ${recommendation.store}`).join("\n")}
-
-Substitutions:
-${(recommendation.substitutions || []).map((item) => `- ${item.explanation || item.replacementRationale || item.productDisplayName}`).join("\n") || "- none"}
-
-Business grounding:
-${JSON.stringify(recommendation.grounding || {})}
-
-Return JSON: { "associateBrief": "short handoff note including mission, event/urgency, budget, outfit, availability, substitution rationale, and associate next step" }`
-      }
-    ], 700);
-    return { brief: output.associateBrief || fallback, source: "openai" };
-  } catch (error) {
-    return { brief: fallback, source: "local", error: error.message };
-  }
-}
-
 async function finalizeRecommendationPreview({ recommendation, outfit, changeSummary, ai }) {
   const event = eventByLabel(recommendation.event);
   const style = styleByLabel(recommendation.style);
@@ -1272,10 +810,7 @@ async function finalizeRecommendationPreview({ recommendation, outfit, changeSum
   const basketValue = outfit.reduce((sum, product) => sum + product.price, 0);
   const availableToday = outfit.filter((product) => (product.inventory[store] || 0) > 0).length;
   const lowStock = outfit.filter((product) => (product.inventory[store] || 0) > 0 && (product.inventory[store] || 0) <= 2);
-  let substitutions = substitutionsForOutfit({ outfit, reference, event, style, store, urgency });
-  const substitutionCopy = await explainSubstitutionsWithOpenAI({ substitutions, outfit, event, style, store, urgency, intent: recommendation.structuredIntent });
-  substitutions = substitutionCopy.substitutions;
-  ai.substitutionExplanation = substitutionCopy.source;
+  const substitutions = substitutionsForOutfit({ outfit, reference, event, style, store, urgency });
   const missed = products
     .filter((product) => sameAudience(product, analysis.gender || reference.gender))
     .filter((product) => event.usages.includes(product.usage) || event.seasons.includes(product.season))
@@ -1344,13 +879,6 @@ async function finalizeRecommendationPreview({ recommendation, outfit, changeSum
       itemCount: outfit.length,
       lowStockNotes: lowStock.map((product) => `${product.productDisplayName}: ${product.inventory[store]} left at ${store}`),
       demandInsight: generatedCopy.demandInsight,
-      signals: buildBusinessSignals({
-        event,
-        store,
-        substitutions,
-        grounding: recommendation.grounding || { passedUrgency: 0 },
-        outfit
-      }),
       associatePrompt: generatedCopy.associatePrompt,
       kpis: [
         { label: "Projected basket", value: `$${basketValue}` },
@@ -1549,11 +1077,9 @@ async function recommend(payload) {
   const ai = {
     enabled: Boolean(OPENAI_API_KEY),
     imageAnalysis: "local",
-    structuredIntent: "local",
     queryEmbeddings: "local",
     copyGeneration: "local",
     recommendationReview: "local",
-    substitutionExplanation: "local",
     model: OPENAI_MODEL,
     embeddingModel: OPENAI_EMBEDDING_MODEL,
     errors: []
@@ -1571,18 +1097,6 @@ async function recommend(payload) {
 
   if (imageDataUrl) reference = customReferenceFromAnalysis(analysis, imageDataUrl);
   const gender = payload.gender || analysis.gender || reference.gender;
-  const baseSlots = complementarySlots(event, analysis);
-  let structuredIntent = localShoppingIntent({ event, style, store, budgetMax, urgency, analysis, slots: baseSlots });
-  if (OPENAI_API_KEY) {
-    try {
-      const interpreted = await interpretShoppingIntentWithOpenAI({ event, style, store, budgetMax, urgency, analysis, slots: baseSlots, reference });
-      structuredIntent = interpreted.intent;
-      ai.structuredIntent = interpreted.source;
-    } catch (error) {
-      ai.errors.push(`Structured intent fallback: ${error.message}`);
-    }
-  }
-  const normalizedUrgency = storeUrgencyFromIntent(structuredIntent.urgency);
   let referenceVector;
   try {
     referenceVector = await buildReferenceVector(reference, analysis, event, style, gender);
@@ -1590,16 +1104,9 @@ async function recommend(payload) {
     ai.errors.push(`Reference embedding fallback: ${error.message}`);
     referenceVector = buildEventQueryVector(event, style, gender, event.roleTargets[0]);
   }
-  const slots = slotsFromIntent(structuredIntent, event, analysis, baseSlots);
-  structuredIntent = {
-    ...structuredIntent,
-    required_slots: slots.map(slotDisplayName),
-    budget_max: budgetMax,
-    store,
-    urgency: normalizeUrgency(normalizedUrgency)
-  };
+  const slots = complementarySlots(event, analysis);
   const selected = new Set([reference.id]);
-  const queryStrings = slots.map((slot) => searchForRole(analysis, slot, event, style, structuredIntent));
+  const queryStrings = slots.map((slot) => searchForRole(analysis, slot, event, style));
   let liveQueryVectors = null;
 
   if (OPENAI_API_KEY) {
@@ -1613,45 +1120,24 @@ async function recommend(payload) {
 
   const outfit = [];
   const substitutions = [];
-  const groundingTracker = {
-    semanticCandidateIds: new Set(),
-    storeCandidateIds: new Set(),
-    budgetCandidateIds: new Set(),
-    urgencyCandidateIds: new Set()
-  };
   let remainingBudget = budgetMax;
 
   for (const [slotIndex, slot] of slots.entries()) {
     const remainingSlots = slots.length - slotIndex - 1;
     const slotBudget = Math.max(45, remainingBudget - remainingSlots * 45);
     const eventVector = liveQueryVectors?.[slotIndex] || buildEventQueryVector(event, style, gender, slot);
-    const baseCandidates = products
+    const ranked = products
       .filter((product) => !selected.has(product.id))
       .filter((product) => sameAudience(product, gender))
       .filter((product) => slotMatches(product, slot))
-      .filter((product) => !isTooSimilarToStarter(product, analysis, slot));
-    const semanticallyRetrieved = baseCandidates
-      .map((product) => ({ product, semantic: (dot(eventVector, getVector(product.index)) + 1) / 2 }))
-      .sort((a, b) => b.semantic - a.semantic)
-      .slice(0, 12)
-      .map((item) => item.product);
-    for (const candidate of semanticallyRetrieved) {
-      groundingTracker.semanticCandidateIds.add(candidate.id);
-      if ((candidate.inventory[store] || 0) > 0) groundingTracker.storeCandidateIds.add(candidate.id);
-      if (candidate.price <= slotBudget) groundingTracker.budgetCandidateIds.add(candidate.id);
-      if (normalizedUrgency === "today" ? (candidate.inventory[store] || 0) > 0 : Object.values(candidate.inventory).some((qty) => qty > 0)) {
-        groundingTracker.urgencyCandidateIds.add(candidate.id);
-      }
-    }
-
-    const ranked = baseCandidates
+      .filter((product) => !isTooSimilarToStarter(product, analysis, slot))
       .filter((product) => product.price <= slotBudget)
       .map((product) => {
-        const score = candidateScore(product, { reference, referenceVector, eventVector, event, style, store, urgency: normalizedUrgency, budgetMax: slotBudget, intent: structuredIntent });
-        const fit = guardrail(reference, product, event, store, normalizedUrgency);
+        const score = candidateScore(product, { reference, referenceVector, eventVector, event, style, store, urgency, budgetMax: slotBudget });
+        const fit = guardrail(reference, product, event, store, urgency);
         return { product, score, fit };
       })
-      .filter((item) => item.fit.approved || normalizedUrgency !== "today")
+      .filter((item) => item.fit.approved || urgency !== "today")
       .sort((a, b) => b.score - a.score);
 
     const primary = ranked[0];
@@ -1661,30 +1147,23 @@ async function recommend(payload) {
     outfit.push({
       ...primary.product,
       role: outfitRole(primary.product, slot),
-      score: Math.round(clamp(primary.score, 0, 1) * 100),
+      score: Math.round(primary.score * 100),
       guardrail: primary.fit,
       why: whyThisWorks(primary.product, reference, event, store),
       retrievalQuery: queryStrings[slotIndex]
     });
 
-    const primaryStock = primary.product.inventory[store] || 0;
-    const substitute = primaryStock <= 2
-      ? ranked.find((item) => item.product.id !== primary.product.id && (item.product.inventory[store] || 0) > primaryStock)
-      : null;
+    const substitute = ranked.find((item) => item.product.id !== primary.product.id && (item.product.inventory[store] || 0) >= (primary.product.inventory[store] || 0));
     if (substitute) {
       substitutions.push({
         forProductId: primary.product.id,
         ...substitute.product,
         role: outfitRole(substitute.product, slot),
-        score: Math.round(clamp(substitute.score, 0, 1) * 100),
-        guardrail: substitute.fit,
+        score: Math.round(substitute.score * 100),
         why: `Substitute for ${primary.product.articleType.toLowerCase()} when local stock is low.`
       });
     }
   }
-  const substitutionCopy = await explainSubstitutionsWithOpenAI({ substitutions, outfit, event, style, store, urgency: normalizedUrgency, intent: structuredIntent });
-  substitutions.splice(0, substitutions.length, ...substitutionCopy.substitutions);
-  ai.substitutionExplanation = substitutionCopy.source;
 
   const basketValue = outfit.reduce((sum, product) => sum + product.price, 0);
   const availableToday = outfit.filter((product) => (product.inventory[store] || 0) > 0).length;
@@ -1701,7 +1180,7 @@ async function recommend(payload) {
       event,
       style,
       store,
-      urgency: normalizedUrgency,
+      urgency,
       outfit,
       substitutions,
       basketValue,
@@ -1732,7 +1211,7 @@ async function recommend(payload) {
       event,
       style,
       store,
-      urgency: normalizedUrgency,
+      urgency,
       outfit,
       basketValue,
       analysis,
@@ -1755,7 +1234,6 @@ async function recommend(payload) {
   return {
     analysis: {
       item: reference.productDisplayName,
-      structuredIntent,
       structuredAttributes: {
         item_type: analysis.item_type,
         category: analysis.category,
@@ -1772,21 +1250,18 @@ async function recommend(payload) {
     },
     ai,
     reference,
-    structuredIntent,
     event: event.label,
     style: style.label,
     store,
-    urgency: normalizedUrgency,
+    urgency,
     outfit,
     substitutions,
-    grounding: buildGroundingSummary({ grounding: groundingTracker, outfit, substitutions, slots, store, budgetMax, urgency: normalizedUrgency }),
     business: {
       basketValue,
       availableToday,
       itemCount: outfit.length,
       lowStockNotes: lowStock.map((product) => `${product.productDisplayName}: ${product.inventory[store]} left at ${store}`),
       demandInsight: generatedCopy.demandInsight,
-      signals: buildBusinessSignals({ event, store, substitutions, grounding: buildGroundingSummary({ grounding: groundingTracker, outfit, substitutions, slots, store, budgetMax, urgency: normalizedUrgency }), outfit }),
       associatePrompt: generatedCopy.associatePrompt,
       kpis: [
         { label: "Projected basket", value: `$${basketValue}` },
@@ -1797,11 +1272,9 @@ async function recommend(payload) {
     },
     pipeline: [
       ai.imageAnalysis === "openai" ? "OpenAI analyzes the starter image and returns structured styling attributes." : "Local fallback uses catalog metadata as structured starter-item attributes.",
-      ai.structuredIntent === "openai" ? "OpenAI Structured Outputs converts event, budget, urgency, and starter cues into machine-readable retail intent." : "Local fallback builds the same structured retail intent schema.",
       ai.queryEmbeddings === "openai" ? "OpenAI embeds the generated event-search intents for semantic catalog retrieval." : "Local fallback uses catalog exemplar embeddings for semantic retrieval.",
       "RAG grounds recommendations in catalog items.",
       "Metadata ranking adds store inventory, budget, season, and urgency.",
-      ai.substitutionExplanation === "openai" ? "OpenAI explains deterministic inventory-aware substitutions in shopper-safe language." : "Local fallback explains substitutions from inventory and price rules.",
       ai.copyGeneration === "openai" ? "OpenAI generates associate copy and executive demand insight from the grounded basket." : "Local fallback creates associate copy and demand insight from templates.",
       ai.recommendationReview === "openai" ? "OpenAI performs the final guardrail review: does the outfit work, and does the explanation match the actual products?" : "Local fallback uses rule-based recommendation rationales."
     ]
@@ -1888,8 +1361,7 @@ async function runChatAgent(payload) {
     return {
       assistantMessage: "Generate an outfit first, then I can explain it or help refine alternatives.",
       action: "answer",
-      chatState: payload.chatState || {},
-      structuredAction: { action: "none", target: "basket", display: "none -> basket -> generate outfit first" }
+      chatState: payload.chatState || {}
     };
   }
 
@@ -1904,11 +1376,9 @@ async function runChatAgent(payload) {
   const ai = {
     enabled: Boolean(OPENAI_API_KEY),
     imageAnalysis: recommendation.ai?.imageAnalysis || "local",
-    structuredIntent: recommendation.ai?.structuredIntent || "local",
     queryEmbeddings: recommendation.ai?.queryEmbeddings || "local",
     copyGeneration: recommendation.ai?.copyGeneration || "local",
     recommendationReview: recommendation.ai?.recommendationReview || "local",
-    substitutionExplanation: recommendation.ai?.substitutionExplanation || "local",
     chatAgent: "local",
     model: OPENAI_MODEL,
     embeddingModel: OPENAI_EMBEDDING_MODEL,
@@ -1957,7 +1427,6 @@ async function runChatAgent(payload) {
     wantsAlternative = { name: "find_alternatives", arguments: { targetProductId: inferred.targetProductId, targetRole: inferred.targetRole, goal: inferred.goal } };
   }
   if (!wantsAlternative) {
-    const structuredAction = structuredBasketAction({ message, recommendation, inferred, toolCall: calls.find((item) => item.name === "explain_basket") });
     const explanation = explainCurrentBasket(recommendation);
     let assistantMessage = `Here is what the stylist is doing: ${explanation}`;
     if (OPENAI_API_KEY) {
@@ -1971,10 +1440,9 @@ async function runChatAgent(payload) {
         ai.errors.push(`Chat explanation fallback: ${error.message}`);
       }
     }
-    return { assistantMessage, action: "answer", chatState, ai, structuredAction };
+    return { assistantMessage, action: "answer", chatState, ai };
   }
 
-  const structuredAction = structuredBasketAction({ message, recommendation, inferred, toolCall: wantsAlternative });
   const { target, candidates } = await findAlternativeProducts({
     recommendation,
     chatState,
@@ -1988,8 +1456,7 @@ async function runChatAgent(payload) {
       action: "answer",
       chatState,
       alternatives: [],
-      ai,
-      structuredAction
+      ai
     };
   }
 
@@ -2011,7 +1478,6 @@ async function runChatAgent(payload) {
     previewRecommendation,
     changedProductIds: [target.id, replacement.id],
     alternatives: candidates,
-    structuredAction,
     ai
   };
 }
@@ -2074,12 +1540,6 @@ export async function handler(req, res) {
       for await (const chunk of req) body += chunk;
       return jsonResponse(res, 200, await runChatAgent(JSON.parse(body || "{}")));
     }
-    if (req.method === "POST" && url.pathname === "/api/associate-brief") {
-      let body = "";
-      for await (const chunk of req) body += chunk;
-      const payload = JSON.parse(body || "{}");
-      return jsonResponse(res, 200, await generateAssociateBrief(payload.currentRecommendation || payload));
-    }
     return serveStatic(req, res);
   } catch (error) {
     console.error(error);
@@ -2087,13 +1547,11 @@ export async function handler(req, res) {
   }
 }
 
-export { recommend, runChatAgent, generateAssociateBrief };
 export default handler;
 
 const isVercel = Boolean(process.env.VERCEL);
-const isDirectRun = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 
-if (!isVercel && isDirectRun) {
+if (!isVercel) {
   createServer(handler).listen(PORT, () => {
     console.log(`Fashion Recommendation App running at http://localhost:${PORT}`);
   });

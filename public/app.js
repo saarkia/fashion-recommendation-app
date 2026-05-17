@@ -4,8 +4,6 @@ const state = {
   customImageDataUrl: null,
   latest: null,
   changedProductIds: [],
-  associateBrief: null,
-  associateBriefBusy: false,
   loadingStage: 0,
   loadingDone: false,
   loadingTimer: null,
@@ -40,13 +38,9 @@ const els = {
   customPreview: document.querySelector("#customPreview"),
   clearUpload: document.querySelector("#clearUpload"),
   analysisStrip: document.querySelector("#analysisStrip"),
-  explainabilityGrid: document.querySelector("#explainabilityGrid"),
   productGrid: document.querySelector("#productGrid"),
   kpiGrid: document.querySelector("#kpiGrid"),
   insightBlock: document.querySelector("#insightBlock"),
-  associateBriefBlock: document.querySelector("#associateBriefBlock"),
-  associateBriefButton: document.querySelector("#associateBriefButton"),
-  associateBrief: document.querySelector("#associateBrief"),
   pipelineList: document.querySelector("#pipelineList"),
   chatBlock: document.querySelector("#chatBlock"),
   chatMessages: document.querySelector("#chatMessages"),
@@ -217,8 +211,6 @@ function resetChat() {
 function resetRecommendationView() {
   state.latest = null;
   state.changedProductIds = [];
-  state.associateBrief = null;
-  state.associateBriefBusy = false;
   resetChat();
   renderIdleState();
 }
@@ -301,139 +293,14 @@ function recommendationChatIntro(data) {
   ].filter(Boolean).join("\n\n");
 }
 
-function sentenceCase(value) {
-  const text = String(value || "").replaceAll("_", " ");
-  return text ? text.charAt(0).toUpperCase() + text.slice(1) : "";
-}
-
-function money(value) {
-  return `$${Number(value || 0)}`;
-}
-
-function chipList(values) {
-  return (values || []).filter(Boolean).map((value) => `<span>${escapeHtml(value)}</span>`).join("");
-}
-
-function detailRow(label, value) {
-  const rendered = Array.isArray(value) ? value.filter(Boolean).join(", ") : value;
-  return `
-    <div class="detail-row">
-      <span>${escapeHtml(label)}</span>
-      <strong>${escapeHtml(rendered || "Not specified")}</strong>
-    </div>
-  `;
-}
-
-function renderIntentPanel(data) {
-  const intent = data.structuredIntent || data.analysis?.structuredIntent || {};
-  const starter = intent.starter_item_analysis || {};
-  return `
-    <article class="explain-card intent-card">
-      <div class="explain-card-heading">
-        <p class="eyebrow">Structured Outputs</p>
-        <h2>AI interpreted the shopping mission</h2>
-      </div>
-      <div class="detail-grid">
-        ${detailRow("Occasion", intent.occasion || data.event)}
-        ${detailRow("Formality", sentenceCase(intent.formality))}
-        ${detailRow("Style direction", intent.style_direction)}
-        ${detailRow("Colour palette", intent.colour_palette)}
-        ${detailRow("Budget constraint", intent.budget_max ? `Under ${money(intent.budget_max)}` : "")}
-        ${detailRow("Urgency", intent.urgency === "available_today" ? "Available today" : "Ship or transfer")}
-        ${detailRow("Selected store", intent.store || data.store)}
-        ${detailRow("Required slots", intent.required_slots)}
-        ${detailRow("Starter item", [starter.item_type, ...(starter.colours || [])].filter(Boolean).join(" / ") || data.analysis?.item)}
-        ${detailRow("Constraints or exclusions", intent.constraints)}
-      </div>
-    </article>
-  `;
-}
-
-function renderGroundingPanel(data) {
-  const grounding = data.grounding || {};
-  return `
-    <article class="explain-card grounding-card">
-      <div class="explain-card-heading">
-        <p class="eyebrow">RAG + retail truth</p>
-        <h2>Grounded against RetailNext systems</h2>
-      </div>
-      <div class="metric-list">
-        ${detailRow("Semantic candidates retrieved", grounding.semanticCandidatesRetrieved)}
-        ${detailRow("Passed store availability", grounding.passedStoreAvailability)}
-        ${detailRow("Passed budget fit", grounding.passedBudgetFit)}
-        ${detailRow("Passed urgency", grounding.passedUrgency)}
-        ${detailRow("Substitutions needed", grounding.substitutionsNeeded)}
-        ${detailRow("Outfit completeness", grounding.outfitCompleteness?.label)}
-      </div>
-    </article>
-  `;
-}
-
-function renderSubstitutionPanel(data) {
-  if (!data.substitutions?.length) {
-    return `
-      <article class="explain-card substitution-card">
-        <div class="explain-card-heading">
-          <p class="eyebrow">Substitution recovery</p>
-          <h2>No stock-risk substitute needed</h2>
-        </div>
-        <p>The basket is complete against the current store, budget, and urgency rules.</p>
-      </article>
-    `;
-  }
-  const rows = data.substitutions.slice(0, 3).map((item) => `
-    <div class="substitution-row">
-      <div>
-        <span>Original / slot</span>
-        <strong>${escapeHtml(item.originalItem || item.role || "Preferred item")}</strong>
-        <small>${escapeHtml(item.failureReason || "Local stock risk")}</small>
-      </div>
-      <div>
-        <span>Replacement</span>
-        <strong>${escapeHtml(item.replacementItem || item.productDisplayName)}</strong>
-        <small>${escapeHtml(item.replacementRationale || item.why || "")}</small>
-      </div>
-      <p>${escapeHtml(item.explanation || "")}</p>
-      <div class="constraint-chips">${chipList(item.preservedConstraints || [])}</div>
-    </div>
-  `).join("");
-  return `
-    <article class="explain-card substitution-card wide-card">
-      <div class="explain-card-heading">
-        <p class="eyebrow">Generation + inventory rules</p>
-        <h2>Substitution explanation</h2>
-      </div>
-      ${rows}
-    </article>
-  `;
-}
-
-function renderExplainability(data) {
-  els.explainabilityGrid.innerHTML = [
-    renderIntentPanel(data),
-    renderGroundingPanel(data),
-    renderSubstitutionPanel(data)
-  ].join("");
-}
-
-function structuredActionMarkup(action) {
-  if (!action?.display) return "";
-  return `
-    <div class="action-readout">
-      <span>AI converted your request into</span>
-      <strong>${escapeHtml(action.display)}</strong>
-    </div>
-  `;
-}
-
 function renderChat() {
   const hasRecommendation = Boolean(state.latest?.outfit?.length);
   const hasOpenAI = Boolean(state.bootstrap?.hasOpenAI);
   els.chatBlock.hidden = false;
-  els.quickPrompts.hidden = state.isGenerating || !hasRecommendation;
-  els.chatForm.hidden = state.isGenerating || !hasRecommendation;
-  els.chatInput.disabled = !hasRecommendation || state.chat.isBusy || state.isGenerating;
-  els.chatForm.querySelector("button").disabled = !hasRecommendation || state.chat.isBusy || state.isGenerating;
+  els.quickPrompts.hidden = state.isGenerating || !hasRecommendation || !hasOpenAI;
+  els.chatForm.hidden = state.isGenerating || !hasRecommendation || !hasOpenAI;
+  els.chatInput.disabled = !hasRecommendation || !hasOpenAI || state.chat.isBusy || state.isGenerating;
+  els.chatForm.querySelector("button").disabled = !hasRecommendation || !hasOpenAI || state.chat.isBusy || state.isGenerating;
 
   if (state.isGenerating) {
     els.chatMessages.innerHTML = `
@@ -447,9 +314,13 @@ function renderChat() {
     return;
   }
 
+  if (!hasOpenAI) {
+    els.chatMessages.innerHTML = `<div class="chat-empty">OpenAI API key required for agentic chat refinement.</div>`;
+    return;
+  }
+
   const messages = state.chat.history.map((entry) => `
     <div class="chat-message ${entry.role === "user" ? "from-user" : "from-agent"}">
-      ${entry.structuredAction ? structuredActionMarkup(entry.structuredAction) : ""}
       ${escapeHtml(entry.content)}
     </div>
   `);
@@ -474,8 +345,7 @@ function renderChat() {
     messages.push(`<div class="chat-message from-agent">Checking the catalog and styling constraints...</div>`);
   }
 
-  const mode = hasOpenAI ? "OpenAI tool-calling will convert follow-ups into basket actions." : "Local fallback will convert follow-ups into the same basket action schema.";
-  els.chatMessages.innerHTML = messages.join("") || `<div class="chat-empty">Generate an outfit, then I’ll explain the recommendation and help refine it. ${mode}</div>`;
+  els.chatMessages.innerHTML = messages.join("") || `<div class="chat-empty">Generate an outfit, then I’ll explain the recommendation and help refine it.</div>`;
   els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
 }
 
@@ -510,13 +380,10 @@ function renderIdleState() {
       <span>Guardrails</span>
     </div>
   `;
-  els.explainabilityGrid.innerHTML = "";
   els.productGrid.classList.remove("is-process");
   els.productGrid.innerHTML = `<div class="empty-state">Your outfit recommendations will appear here after you press Generate outfit.</div>`;
   els.kpiGrid.replaceChildren();
   els.insightBlock.innerHTML = "";
-  els.associateBriefBlock.hidden = true;
-  els.associateBrief.innerHTML = "";
   els.pipelineList.replaceChildren(...loadingSteps.map((step) => {
     const li = document.createElement("li");
     li.textContent = step.title;
@@ -542,13 +409,10 @@ function renderLoadingProcess() {
       <span>Guardrails</span>
     </div>
   `;
-  els.explainabilityGrid.innerHTML = "";
   els.productGrid.classList.add("is-process");
   els.productGrid.innerHTML = loadingBuildGridMarkup();
   els.kpiGrid.replaceChildren();
   els.insightBlock.innerHTML = "";
-  els.associateBriefBlock.hidden = true;
-  els.associateBrief.innerHTML = "";
   els.pipelineList.replaceChildren(...loadingSteps.map((step) => {
     const li = document.createElement("li");
     li.textContent = `${step.title}: ${step.service}`;
@@ -597,8 +461,6 @@ function finishLoadingProcess() {
 function renderResult(data, options = {}) {
   state.latest = data;
   state.changedProductIds = options.changedProductIds || [];
-  state.associateBrief = null;
-  state.associateBriefBusy = false;
   state.loadingDone = false;
   state.isGenerating = false;
   setGenerateButtonState(false);
@@ -607,15 +469,13 @@ function renderResult(data, options = {}) {
   }
   els.productGrid.classList.remove("is-process");
   const attrs = data.analysis.structuredAttributes;
-  const liveSteps = [data.ai?.imageAnalysis, data.ai?.structuredIntent, data.ai?.queryEmbeddings, data.ai?.substitutionExplanation, data.ai?.copyGeneration, data.ai?.recommendationReview].filter((step) => step === "openai").length;
-  els.statusLabel.textContent = liveSteps ? `OpenAI live (${liveSteps}/6)` : "Local fallback";
+  const liveSteps = [data.ai?.imageAnalysis, data.ai?.queryEmbeddings, data.ai?.copyGeneration, data.ai?.recommendationReview].filter((step) => step === "openai").length;
+  els.statusLabel.textContent = liveSteps ? `OpenAI live (${liveSteps}/4)` : "Local fallback";
   els.statusDot.classList.toggle("is-live", Boolean(liveSteps));
   const aiSummary = liveSteps
     ? `OpenAI is live for ${[
         data.ai.imageAnalysis === "openai" ? "vision analysis" : null,
-        data.ai.structuredIntent === "openai" ? "structured intent" : null,
         data.ai.queryEmbeddings === "openai" ? "query embeddings" : null,
-        data.ai.substitutionExplanation === "openai" ? "substitution explanation" : null,
         data.ai.copyGeneration === "openai" ? "customer explanation" : null,
         data.ai.recommendationReview === "openai" ? "final guardrail review" : null
       ].filter(Boolean).join(", ")}.`
@@ -626,28 +486,20 @@ function renderResult(data, options = {}) {
         `${data.analysis.item} was interpreted as a ${String(attrs.color).toLowerCase()} ${String(attrs.item_type).toLowerCase()}.`,
         `Recommendations are selected to complete the outfit for ${data.event.toLowerCase()}, not replace the starter item.`
       ];
-  const available = data.business.availableToday || 0;
-  const itemCount = data.outfit.length || 0;
-  const substitutionCount = data.substitutions?.length || 0;
-  const trendAverage = itemCount ? Math.round(data.outfit.reduce((sum, product) => sum + (product.trendScore || 0), 0) / itemCount) : 0;
-  const titleOccasion = data.structuredIntent?.occasion || data.event;
   els.analysisStrip.innerHTML = `
-    <div class="result-hero-copy">
-      <p class="eyebrow">Availability-led result</p>
-      <h2>Complete ${escapeHtml(titleOccasion.toLowerCase())} look - ${money(data.business.basketValue)}</h2>
-      <p><strong>${available} of ${itemCount} items available today at ${escapeHtml(data.store)}.</strong> ${substitutionCount ? `${substitutionCount} item${substitutionCount === 1 ? "" : "s"} substituted or backed up due to local stock risk.` : "No stock-risk substitution needed."}</p>
+    <div>
+      <p class="eyebrow">AI stylist readout</p>
+      <p><strong>${escapeHtml(introLines[0])}</strong> ${escapeHtml(introLines[1])}</p>
       ${data.analysis.outfitRationale ? `<p class="ai-review">${escapeHtml(data.analysis.outfitRationale)}</p>` : ""}
       <p class="ai-detail">${escapeHtml(aiSummary)}</p>
     </div>
-    <div class="availability-badges">
-      <span>${available}/${itemCount} today</span>
-      <span>${substitutionCount} substitutes</span>
-      <span>${trendAverage >= 70 ? "Fresh / trending style match" : "Event-fit style match"}</span>
-      <span>${data.urgency === "today" ? "Pickup today" : "Ship / transfer"}</span>
+    <div class="analysis-tags">
+      <span>${escapeHtml(attrs.category)}</span>
+      <span>${escapeHtml(attrs.usage || "General")}</span>
+      <span>${liveSteps ? "OpenAI" : "Fallback"}</span>
+      <span>${data.urgency === "today" ? "Today" : "Network"}</span>
     </div>
   `;
-
-  renderExplainability(data);
 
   els.productGrid.replaceChildren(...data.outfit.map(productCard));
   if (!data.outfit.length) {
@@ -667,23 +519,18 @@ function renderResult(data, options = {}) {
     ? `<p><strong>Low stock:</strong> ${escapeHtml(data.business.lowStockNotes.join(" "))}</p>`
     : `<p><strong>Low stock:</strong> no immediate stock risks in the primary basket.</p>`;
 
-  const signals = data.business.signals || {};
+  const substitutes = data.substitutions
+    .slice(0, 3)
+    .map((item) => `${item.productDisplayName} (${item.inventory[data.store] || 0} in store)`)
+    .join("; ");
 
   els.insightBlock.innerHTML = `
-    <p class="eyebrow">Business signal</p>
-    <p><strong>Demand signal:</strong> ${escapeHtml(signals.demandSignal || data.event.toLowerCase())}</p>
-    <p><strong>Availability gap:</strong> ${escapeHtml(signals.availabilityGap || "not detected")}</p>
-    <p><strong>Potential action:</strong> ${escapeHtml(signals.potentialAction || "monitor this event trend")}</p>
-    <p><strong>Missed demand prevented:</strong> ${escapeHtml(signals.missedDemandPrevented || "complete basket found")}</p>
-    <p class="executive-summary">${escapeHtml(signals.executiveSummary || data.business.demandInsight)}</p>
+    <p class="eyebrow">Missed demand insight</p>
+    <p>${escapeHtml(data.business.demandInsight)}</p>
     ${lowStock}
+    <p><strong>Substitutions:</strong> ${escapeHtml(substitutes || "none needed for this basket.")}</p>
     <div class="message-box">${escapeHtml(data.business.associatePrompt)}</div>
   `;
-
-  els.associateBriefBlock.hidden = false;
-  els.associateBriefButton.disabled = false;
-  els.associateBriefButton.textContent = "Create associate brief";
-  els.associateBrief.innerHTML = "";
 
   els.pipelineList.replaceChildren(
     ...data.pipeline.map((step) => {
@@ -746,7 +593,7 @@ function currentConstraints() {
 
 async function sendChatMessage(message) {
   const trimmed = String(message || "").trim();
-  if (!trimmed || !state.latest || state.chat.isBusy) return;
+  if (!trimmed || !state.latest || state.chat.isBusy || !state.bootstrap?.hasOpenAI) return;
   state.chat.preview = null;
   state.chat.previewChangedProductIds = [];
   state.chat.history.push({ role: "user", content: trimmed });
@@ -768,7 +615,7 @@ async function sendChatMessage(message) {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Chat request failed");
     state.chat.chatState = data.chatState || state.chat.chatState;
-    state.chat.history.push({ role: "assistant", content: data.assistantMessage || "I checked the basket.", structuredAction: data.structuredAction });
+    state.chat.history.push({ role: "assistant", content: data.assistantMessage || "I checked the basket." });
     if (data.action === "preview_update" && data.previewRecommendation) {
       state.chat.preview = data.previewRecommendation;
       state.chat.previewChangedProductIds = data.changedProductIds || [];
@@ -797,35 +644,6 @@ function rejectChatPreview() {
   state.chat.previewChangedProductIds = [];
   state.chat.history.push({ role: "assistant", content: "No problem. I kept the current basket unchanged." });
   renderChat();
-}
-
-async function createAssociateBrief() {
-  if (!state.latest || state.associateBriefBusy) return;
-  state.associateBriefBusy = true;
-  els.associateBriefButton.disabled = true;
-  els.associateBriefButton.textContent = "Creating brief...";
-  els.associateBrief.innerHTML = `<p>Generating associate handoff from the structured intent, outfit, availability, and substitutions.</p>`;
-  try {
-    const response = await fetch("/api/associate-brief", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ currentRecommendation: state.latest })
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Brief request failed");
-    state.associateBrief = data;
-    els.associateBrief.innerHTML = `
-      <p class="eyebrow">${data.source === "openai" ? "OpenAI generated" : "Local fallback"}</p>
-      <p>${escapeHtml(data.brief)}</p>
-    `;
-  } catch (error) {
-    console.error(error);
-    els.associateBrief.innerHTML = `<p>Could not create the associate brief: ${escapeHtml(error.message)}</p>`;
-  } finally {
-    state.associateBriefBusy = false;
-    els.associateBriefButton.disabled = false;
-    els.associateBriefButton.textContent = "Create associate brief";
-  }
 }
 
 async function init() {
@@ -868,8 +686,6 @@ els.chatMessages.addEventListener("click", (event) => {
   if (action === "apply") applyChatPreview();
   if (action === "reject") rejectChatPreview();
 });
-
-els.associateBriefButton.addEventListener("click", createAssociateBrief);
 
 els.uploadZone.addEventListener("click", (event) => {
   if (event.target === els.clearUpload) return;

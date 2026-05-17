@@ -5,7 +5,6 @@
   "type": "module",
   "scripts": {
     "prepare:data": "python3 scripts/prepare_data.py",
-    "eval": "node scripts/run_eval.mjs",
     "start": "node server/index.mjs"
   }
 }
