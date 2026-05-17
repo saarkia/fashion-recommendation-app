@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="x-apple-disable-message-reformatting">
+    <title>Your RetailNext outfit is ready</title>
+    <style>
+      body,
+      table,
+      td,
+      a {
+        -webkit-text-size-adjust: 100%;
+        -ms-text-size-adjust: 100%;
+      }
+
+      table,
+      td {
+        mso-table-lspace: 0pt;
+        mso-table-rspace: 0pt;
+      }
+
+      img {
+        -ms-interpolation-mode: bicubic;
+        border: 0;
+        display: block;
+        height: auto;
+        line-height: 100%;
+        outline: none;
+        text-decoration: none;
+      }
+
+      table {
+        border-collapse: collapse !important;
+      }
+
+      body {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        background: #f2f2ef;
+        color: #111111;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      a {
+        color: #111111;
+      }
+
+      .wrapper {
+        width: 100%;
+        table-layout: fixed;
+        background: #f2f2ef;
+      }
+
+      .container {
+        width: 100%;
+        max-width: 640px;
+        margin: 0 auto;
+        background: #ffffff;
+      }
+
+      .padded {
+        padding-left: 28px;
+        padding-right: 28px;
+      }
+
+      .wordmark {
+        font-size: 24px;
+        line-height: 28px;
+        font-weight: 900;
+        letter-spacing: 0;
+        text-transform: lowercase;
+      }
+
+      .wordmark span {
+        text-transform: uppercase;
+      }
+
+      .eyebrow {
+        margin: 0;
+        color: #5b5b57;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 1.4px;
+        line-height: 16px;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 10px 0 0;
+        color: #111111;
+        font-size: 42px;
+        font-weight: 900;
+        letter-spacing: 0;
+        line-height: 42px;
+      }
+
+      h2 {
+        margin: 0;
+        color: #111111;
+        font-size: 22px;
+        font-weight: 900;
+        letter-spacing: 0;
+        line-height: 26px;
+      }
+
+      h3 {
+        margin: 0;
+        color: #111111;
+        font-size: 17px;
+        font-weight: 900;
+        letter-spacing: 0;
+        line-height: 21px;
+      }
+
+      p {
+        margin: 0;
+        color: #30302d;
+        font-size: 15px;
+        line-height: 22px;
+      }
+
+      .line {
+        border-top: 2px solid #111111;
+      }
+
+      .thin-line {
+        border-top: 1px solid #d7d7d0;
+      }
+
+      .button {
+        background: #111111;
+        color: #ffffff !important;
+        display: inline-block;
+        font-size: 13px;
+        font-weight: 900;
+        letter-spacing: 0.8px;
+        line-height: 16px;
+        padding: 15px 22px;
+        text-decoration: none;
+        text-transform: uppercase;
+      }
+
+      .badge {
+        border: 1px solid #111111;
+        color: #111111;
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.8px;
+        line-height: 14px;
+        padding: 6px 8px;
+        text-transform: uppercase;
+      }
+
+      .muted {
+        color: #6c6c66;
+        font-size: 13px;
+        line-height: 18px;
+      }
+
+      .price {
+        color: #111111;
+        font-size: 16px;
+        font-weight: 900;
+        line-height: 20px;
+      }
+
+      .product-cell {
+        border: 1px solid #111111;
+      }
+
+      @media screen and (max-width: 680px) {
+        .container {
+          width: 100% !important;
+        }
+
+        .padded {
+          padding-left: 18px !important;
+          padding-right: 18px !important;
+        }
+
+        h1 {
+          font-size: 34px !important;
+          line-height: 34px !important;
+        }
+
+        .mobile-stack {
+          display: block !important;
+          width: 100% !important;
+        }
+
+        .mobile-gap {
+          height: 16px !important;
+          line-height: 16px !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    {% assign customer_first_name = api_trigger_properties.${customer_first_name} | default: 'there' %}
+    {% assign cta_url = api_trigger_properties.${cta_url} | default: 'https://fashion-recommendation-app.vercel.app' %}
+    {% assign hero_headline = api_trigger_properties.${hero_headline} | default: 'Your stylist edit is ready.' %}
+    {% assign hero_intro = api_trigger_properties.${hero_intro} | default: 'Your RetailNext stylist built a complete outfit around your selected piece, event, store, and timing.' %}
+    {% assign outfit_story = api_trigger_properties.${outfit_story} | default: '' %}
+    {% assign cta_label = api_trigger_properties.${cta_label} | default: 'View or refine this look' %}
+    {% assign outfit_count = api_trigger_properties.${outfit_count} | default: '4' %}
+    {% assign available_today_count = api_trigger_properties.${available_today_count} | default: outfit_count %}
+    {% assign basket_value = api_trigger_properties.${basket_value} | default: '0' %}
+    {% assign store_name = api_trigger_properties.${store_name} | default: 'your selected store' %}
+    {% assign event_name = api_trigger_properties.${event_name} | default: 'your event' %}
+    {% assign style_preference = api_trigger_properties.${style_preference} | default: 'your style' %}
+    {% assign urgency_label = api_trigger_properties.${urgency_label} | default: 'Available today' %}
+
+    <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">
+      {{api_trigger_properties.${preheader} | default: 'Your RetailNext stylist edit is ready with item-by-item styling notes.'}}
+    </div>
+
+    <center class="wrapper" role="article" aria-roledescription="email" lang="en">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+        <tr>
+          <td align="center">
+            <table class="container" role="presentation" width="640" cellspacing="0" cellpadding="0">
+              <tr>
+                <td class="padded" style="padding-top: 26px; padding-bottom: 18px;">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                    <tr>
+                      <td align="left" class="wordmark">retail<span>NEXT</span>.</td>
+                      <td align="right">
+                        <span class="badge">{{urgency_label}}</span>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <tr>
+                <td class="line"></td>
+              </tr>
+
+              <tr>
+                <td class="padded" style="padding-top: 30px; padding-bottom: 28px;">
+                  <p class="eyebrow">Event Stylist</p>
+                  <h1>{{hero_headline}}</h1>
+                  <p style="padding-top: 16px;">
+                    Hi {{customer_first_name}}, {{hero_intro}}
+                  </p>
+                </td>
+              </tr>
+
+              {% if outfit_story != '' %}
+              <tr>
+                <td class="padded" style="padding-bottom: 28px;">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background: #f7f7f3; border: 1px solid #111111;">
+                    <tr>
+                      <td style="padding: 20px;">
+                        <p class="eyebrow">Why this outfit works</p>
+                        <p style="padding-top: 8px;">{{outfit_story}}</p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              {% endif %}
+
+              <tr>
+                <td class="padded" style="padding-bottom: 28px;">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border: 1px solid #111111;">
+                    <tr>
+                      <td class="mobile-stack" width="50%" valign="top" style="background: #111111; padding: 20px;">
+                        <p class="eyebrow" style="color: #cfcfc8;">Your starter item</p>
+                        <h2 style="color: #ffffff; padding-top: 8px;">{{api_trigger_properties.${starter_item_name} | default: 'Starter item'}}</h2>
+                        <p style="color: #dcdcd6; padding-top: 10px;">
+                          {{api_trigger_properties.${starter_note} | default: 'Your stylist used this piece as the anchor for the full look.'}}
+                        </p>
+                      </td>
+                      <td class="mobile-stack" width="50%" valign="top">
+                        {% if api_trigger_properties.${starter_image_url} %}
+                        <img src="{{api_trigger_properties.${starter_image_url}}}" width="318" alt="{{api_trigger_properties.${starter_item_name} | default: 'Starter item'}}" style="width: 100%; max-width: 318px; background: #f7f7f3;">
+                        {% else %}
+                        <div style="background: #f7f7f3; height: 260px; line-height: 260px; text-align: center; color: #6c6c66; font-size: 13px;">Starter image</div>
+                        {% endif %}
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <tr>
+                <td class="padded" style="padding-bottom: 22px;">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                    <tr>
+                      <td width="33.33%" style="border: 1px solid #111111; padding: 14px;" valign="top">
+                        <p class="eyebrow">Basket</p>
+                        <p class="price" style="padding-top: 6px;">${{basket_value}}</p>
+                      </td>
+                      <td width="33.33%" style="border-top: 1px solid #111111; border-bottom: 1px solid #111111; padding: 14px;" valign="top">
+                        <p class="eyebrow">Available</p>
+                        <p class="price" style="padding-top: 6px;">{{available_today_count}}/{{outfit_count}}</p>
+                      </td>
+                      <td width="33.33%" style="border: 1px solid #111111; padding: 14px;" valign="top">
+                        <p class="eyebrow">Store</p>
+                        <p class="price" style="padding-top: 6px;">{{store_name}}</p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <tr>
+                <td class="padded" style="padding-bottom: 14px;">
+                  <h2>Your recommended pieces</h2>
+                </td>
+              </tr>
+
+              {% if api_trigger_properties.${item_1_name} %}
+              <tr>
+                <td class="padded" style="padding-bottom: 18px;">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                    <tr>
+                      <td class="mobile-stack product-cell" width="44%" valign="top">
+                        <img src="{{api_trigger_properties.${item_1_image_url}}}" width="254" alt="{{api_trigger_properties.${item_1_name}}}" style="width: 100%; max-width: 254px; background: #f7f7f3;">
+                      </td>
+                      <td class="mobile-stack product-cell" width="56%" valign="top" style="padding: 18px;">
+                        <p class="eyebrow">{{api_trigger_properties.${item_1_role} | default: 'Outfit piece'}}</p>
+                        <h3 style="padding-top: 8px;">{{api_trigger_properties.${item_1_name}}}</h3>
+                        <p class="muted" style="padding-top: 8px;">{{api_trigger_properties.${item_1_meta} | default: 'Catalog match'}}</p>
+                        <p style="padding-top: 12px;">{{api_trigger_properties.${item_1_why} | default: 'Chosen by your stylist for this outfit.'}}</p>
+                        {% if api_trigger_properties.${item_1_pairing_note} %}
+                        <p class="muted" style="padding-top: 8px;">{{api_trigger_properties.${item_1_pairing_note}}}</p>
+                        {% endif %}
+                        <p class="price" style="padding-top: 14px;">${{api_trigger_properties.${item_1_price} | default: '0'}} · {{api_trigger_properties.${item_1_fit_score} | default: '90'}}% fit</p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              {% endif %}
+
+              {% if api_trigger_properties.${item_2_name} %}
+              <tr>
+                <td class="padded" style="padding-bottom: 18px;">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                    <tr>
+                      <td class="mobile-stack product-cell" width="44%" valign="top">
+                        <img src="{{api_trigger_properties.${item_2_image_url}}}" width="254" alt="{{api_trigger_properties.${item_2_name}}}" style="width: 100%; max-width: 254px; background: #f7f7f3;">
+                      </td>
+                      <td class="mobile-stack product-cell" width="56%" valign="top" style="padding: 18px;">
+                        <p class="eyebrow">{{api_trigger_properties.${item_2_role} | default: 'Outfit piece'}}</p>
+                        <h3 style="padding-top: 8px;">{{api_trigger_properties.${item_2_name}}}</h3>
+                        <p class="muted" style="padding-top: 8px;">{{api_trigger_properties.${item_2_meta} | default: 'Catalog match'}}</p>
+                        <p style="padding-top: 12px;">{{api_trigger_properties.${item_2_why} | default: 'Chosen by your stylist for this outfit.'}}</p>
+                        {% if api_trigger_properties.${item_2_pairing_note} %}
+                        <p class="muted" style="padding-top: 8px;">{{api_trigger_properties.${item_2_pairing_note}}}</p>
+                        {% endif %}
+                        <p class="price" style="padding-top: 14px;">${{api_trigger_properties.${item_2_price} | default: '0'}} · {{api_trigger_properties.${item_2_fit_score} | default: '90'}}% fit</p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              {% endif %}
+
+              {% if api_trigger_properties.${item_3_name} %}
+              <tr>
+                <td class="padded" style="padding-bottom: 18px;">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                    <tr>
+                      <td class="mobile-stack product-cell" width="44%" valign="top">
+                        <img src="{{api_trigger_properties.${item_3_image_url}}}" width="254" alt="{{api_trigger_properties.${item_3_name}}}" style="width: 100%; max-width: 254px; background: #f7f7f3;">
+                      </td>
+                      <td class="mobile-stack product-cell" width="56%" valign="top" style="padding: 18px;">
+                        <p class="eyebrow">{{api_trigger_properties.${item_3_role} | default: 'Outfit piece'}}</p>
+                        <h3 style="padding-top: 8px;">{{api_trigger_properties.${item_3_name}}}</h3>
+                        <p class="muted" style="padding-top: 8px;">{{api_trigger_properties.${item_3_meta} | default: 'Catalog match'}}</p>
+                        <p style="padding-top: 12px;">{{api_trigger_properties.${item_3_why} | default: 'Chosen by your stylist for this outfit.'}}</p>
+                        {% if api_trigger_properties.${item_3_pairing_note} %}
+                        <p class="muted" style="padding-top: 8px;">{{api_trigger_properties.${item_3_pairing_note}}}</p>
+                        {% endif %}
+                        <p class="price" style="padding-top: 14px;">${{api_trigger_properties.${item_3_price} | default: '0'}} · {{api_trigger_properties.${item_3_fit_score} | default: '90'}}% fit</p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              {% endif %}
+
+              {% if api_trigger_properties.${item_4_name} %}
+              <tr>
+                <td class="padded" style="padding-bottom: 18px;">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                    <tr>
+                      <td class="mobile-stack product-cell" width="44%" valign="top">
+                        <img src="{{api_trigger_properties.${item_4_image_url}}}" width="254" alt="{{api_trigger_properties.${item_4_name}}}" style="width: 100%; max-width: 254px; background: #f7f7f3;">
+                      </td>
+                      <td class="mobile-stack product-cell" width="56%" valign="top" style="padding: 18px;">
+                        <p class="eyebrow">{{api_trigger_properties.${item_4_role} | default: 'Outfit piece'}}</p>
+                        <h3 style="padding-top: 8px;">{{api_trigger_properties.${item_4_name}}}</h3>
+                        <p class="muted" style="padding-top: 8px;">{{api_trigger_properties.${item_4_meta} | default: 'Catalog match'}}</p>
+                        <p style="padding-top: 12px;">{{api_trigger_properties.${item_4_why} | default: 'Chosen by your stylist for this outfit.'}}</p>
+                        {% if api_trigger_properties.${item_4_pairing_note} %}
+                        <p class="muted" style="padding-top: 8px;">{{api_trigger_properties.${item_4_pairing_note}}}</p>
+                        {% endif %}
+                        <p class="price" style="padding-top: 14px;">${{api_trigger_properties.${item_4_price} | default: '0'}} · {{api_trigger_properties.${item_4_fit_score} | default: '90'}}% fit</p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              {% endif %}
+
+              <tr>
+                <td class="padded" style="padding-top: 2px; padding-bottom: 28px;">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background: #f7f7f3; border: 1px solid #111111;">
+                    <tr>
+                      <td style="padding: 20px;">
+                        <p class="eyebrow">Stylist note</p>
+                        <p style="padding-top: 8px;">
+                          {{api_trigger_properties.${associate_note} | default: 'Your stylist saved the strongest locally available version of this outfit.'}}
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              {% if api_trigger_properties.${substitute_1_name} %}
+              <tr>
+                <td class="padded" style="padding-bottom: 28px;">
+                  <h2>Backup option</h2>
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top: 14px; border: 1px solid #111111;">
+                    <tr>
+                      <td width="116" valign="top">
+                        <img src="{{api_trigger_properties.${substitute_1_image_url}}}" width="116" alt="{{api_trigger_properties.${substitute_1_name}}}" style="width: 116px; background: #f7f7f3;">
+                      </td>
+                      <td valign="top" style="padding: 14px;">
+                        <p class="eyebrow">If {{api_trigger_properties.${substitute_1_for_item_name} | default: 'an item'}} sells out</p>
+                        <h3 style="padding-top: 6px;">{{api_trigger_properties.${substitute_1_name}}}</h3>
+                        <p class="muted" style="padding-top: 8px;">{{api_trigger_properties.${substitute_1_inventory_count} | default: 'Limited'}} available at {{store_name}}</p>
+                        {% if api_trigger_properties.${substitute_1_note} %}
+                        <p style="padding-top: 8px;">{{api_trigger_properties.${substitute_1_note}}}</p>
+                        {% endif %}
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              {% endif %}
+
+              <tr>
+                <td class="padded" align="center" style="padding-bottom: 32px;">
+                  <a class="button" href="{{cta_url}}">{{cta_label}}</a>
+                  <p class="muted" style="padding-top: 14px;">
+                    Inventory is based on the latest RetailNext stylist readout and may change before pickup.
+                  </p>
+                </td>
+              </tr>
+
+              <tr>
+                <td class="line"></td>
+              </tr>
+
+              <tr>
+                <td class="padded" style="padding-top: 20px; padding-bottom: 28px;">
+                  <p class="muted">
+                    retailNEXT. Event Stylist<br>
+                    {{api_trigger_properties.${footer_store_line} | default: 'Built from your selected store, event, budget, and style preferences.'}}
+                  </p>
+                  <div style="padding-top: 14px;">
+                    {{${email_footer}}}
+                  </div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </center>
+  </body>
+</html>

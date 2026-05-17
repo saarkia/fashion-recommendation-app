@@ -21,6 +21,7 @@ const state = {
     previewSwap: null,
     previewChangedProductIds: [],
     suggestedPrompts: [],
+    pendingEmail: false,
     isBusy: false
   }
 };
@@ -118,6 +119,14 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function extractEmailAddress(value) {
+  return String(value || "").match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] || "";
+}
+
+function isEmailIntent(value) {
+  return /\b(email|e-mail|send|share|mail|inbox)\b/i.test(String(value || ""));
 }
 
 function shopperFacingText(value) {
@@ -228,6 +237,7 @@ function resetChat() {
     previewSwap: null,
     previewChangedProductIds: [],
     suggestedPrompts: [],
+    pendingEmail: false,
     isBusy: false
   };
   state.changedProductIds = [];
@@ -653,17 +663,60 @@ function currentConstraints() {
   };
 }
 
+async function sendOutfitEmailFromChat(email) {
+  const response = await fetch("/api/send-outfit-email", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      email,
+      currentRecommendation: state.latest
+    })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "Email send failed");
+  return data;
+}
+
 async function sendChatMessage(message) {
   const trimmed = String(message || "").trim();
-  if (!trimmed || !state.latest || state.chat.isBusy || !state.bootstrap?.hasOpenAI) return;
+  if (!trimmed || state.chat.isBusy || !state.bootstrap?.hasOpenAI) return;
+  const emailAddress = extractEmailAddress(trimmed);
+  const wantsEmail = isEmailIntent(trimmed) || state.chat.pendingEmail;
   state.chat.preview = null;
   state.chat.previewSwap = null;
   state.chat.previewChangedProductIds = [];
   state.chat.history.push({ role: "user", content: trimmed });
+
+  if (!state.latest?.outfit?.length) {
+    state.chat.history.push({
+      role: "assistant",
+      content: wantsEmail
+        ? "Generate an outfit first, then I can email the full look with the stylist rationale."
+        : "Generate an outfit first, then I can explain it or help refine alternatives."
+    });
+    renderChat();
+    return;
+  }
+
   state.chat.isBusy = true;
   renderChat();
 
   try {
+    if (wantsEmail) {
+      if (!emailAddress) {
+        state.chat.pendingEmail = true;
+        state.chat.history.push({ role: "assistant", content: "Of course. What email address should I send this outfit to?" });
+        return;
+      }
+      await sendOutfitEmailFromChat(emailAddress);
+      state.chat.pendingEmail = false;
+      state.chat.history.push({
+        role: "assistant",
+        content: `Done — I sent this outfit to ${emailAddress}. The email includes Mira's styling rationale, item-by-item pairing notes, and the availability context.`
+      });
+      return;
+    }
+
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -687,7 +740,7 @@ async function sendChatMessage(message) {
     }
   } catch (error) {
     console.error(error);
-    state.chat.history.push({ role: "assistant", content: `I could not complete that refinement: ${error.message}` });
+    state.chat.history.push({ role: "assistant", content: wantsEmail ? `I could not send the email yet: ${error.message}. I kept your basket unchanged.` : `I could not complete that refinement: ${error.message}` });
   } finally {
     state.chat.isBusy = false;
     renderChat();

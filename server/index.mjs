@@ -15,6 +15,10 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const OPENAI_EMBEDDING_MODEL = process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-large";
 const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || 20000);
+const BRAZE_REST_ENDPOINT = process.env.BRAZE_REST_ENDPOINT;
+const BRAZE_REST_API_KEY = process.env.BRAZE_REST_API_KEY;
+const BRAZE_OUTFIT_EMAIL_CAMPAIGN_ID = process.env.BRAZE_OUTFIT_EMAIL_CAMPAIGN_ID;
+const PUBLIC_APP_URL = (process.env.PUBLIC_APP_URL || "https://fashion-recommendation-app.vercel.app").replace(/\/$/, "");
 
 const productsPath = join(dataDir, "products.json");
 const vectorsPath = join(dataDir, "embeddings.f32");
@@ -1377,9 +1381,13 @@ function fallbackFollowUpPrompts(recommendation) {
   const hasShoes = outfit.some((product) => productGroup(product.articleType, product.subCategory) === "shoe");
   const prompts = [
     hasShoes ? "Can we change the shoes?" : "Can we swap one item?",
-    (recommendation?.business?.basketValue || 0) > 220 ? "Can you make it cheaper?" : "Can you make it more polished?"
+    "Email this outfit"
   ];
   return [...new Set(prompts)].slice(0, 2);
+}
+
+function isEmailRequestText(text) {
+  return /\b(email|e-mail|send|share|inbox|mail)\b/i.test(String(text || ""));
 }
 
 async function suggestFollowUpPrompts({ recommendation, lastMessage = "" }) {
@@ -1401,6 +1409,7 @@ Rules:
 - Keep each prompt under 8 words.
 - Do not repeat the last shopper message.
 - Make prompts specific to this basket when useful.
+- Include "Email this outfit" as one option unless the last shopper message already involved email/share/send.
 - Good examples: "Can we change the shoes?", "Can you make it cheaper?", "Any brighter options?"
 
 Last shopper message: ${lastMessage || "(none)"}
@@ -1419,10 +1428,261 @@ Return JSON:
     const prompts = Array.isArray(output.prompts)
       ? output.prompts.map((prompt) => String(prompt).trim()).filter(Boolean)
       : [];
-    return prompts.length >= 2 ? prompts.slice(0, 2) : fallback;
+    const deduped = [...new Set(prompts)].slice(0, 2);
+    if (!isEmailRequestText(lastMessage) && !deduped.some(isEmailRequestText)) {
+      deduped[1] = "Email this outfit";
+    }
+    return deduped.length >= 2 ? deduped.slice(0, 2) : fallback;
   } catch {
     return fallback;
   }
+}
+
+function httpError(statusCode, message) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "").trim());
+}
+
+function titleCase(value) {
+  return String(value || "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function urgencyLabel(urgency) {
+  return urgency === "today" ? "Available today" : "Ship or transfer";
+}
+
+function inventoryCount(product, store) {
+  return Number(product?.inventory?.[store] || 0);
+}
+
+function absoluteImageUrl(product) {
+  const image = product?.image;
+  if (!image || image.startsWith("data:")) return "";
+  if (image.startsWith("http://") || image.startsWith("https://")) return image;
+  if (image.startsWith("/")) return `${PUBLIC_APP_URL}${image}`;
+  if (product?.id && product.id !== "uploaded") return `${PUBLIC_APP_URL}/catalog-images/${product.id}.jpg`;
+  return "";
+}
+
+function compactText(value, fallback = "") {
+  return String(value || fallback || "").replace(/\s+/g, " ").trim();
+}
+
+function fallbackOutfitEmailCopy({ firstName, recommendation }) {
+  const outfit = recommendation.outfit || [];
+  const starterName = recommendation.reference?.productDisplayName || recommendation.analysis?.item || "your starter item";
+  const eventName = recommendation.event || "your event";
+  const store = recommendation.store || "your selected store";
+  const availableToday = recommendation.business?.availableToday || 0;
+  const itemNames = outfit.map((product) => product.productDisplayName).join(", ");
+  return {
+    email_subject: `Your ${eventName.toLowerCase()} edit is ready`.slice(0, 58),
+    preheader: `A grounded outfit built around ${starterName}, with availability checked.`.slice(0, 110),
+    hero_headline: `Your ${eventName.toLowerCase()} look is ready.`,
+    hero_intro: `I built this look around ${starterName}, then checked ${store} availability so the basket stays practical as well as styled.`,
+    outfit_story: `The starter item anchors the palette and level of polish, while ${itemNames || "the recommended pieces"} complete the look for ${eventName.toLowerCase()}. ${availableToday}/${outfit.length} recommended pieces are available today, so the styling stays grounded in current inventory.`,
+    starter_note: `${starterName} sets the direction for the outfit, so the other pieces were chosen to complement it rather than compete with it.`,
+    associate_note: recommendation.business?.associatePrompt || `Lead with the starter item, then show the locally available pieces that complete the basket.`,
+    cta_label: "View and refine this look",
+    items: outfit.map((product) => ({
+      id: product.id,
+      why: product.why || `${product.productDisplayName} supports the outfit's color, formality, and event fit.`,
+      pairing_note: `${product.baseColour || "This color"} works with the starter item and keeps the outfit cohesive.`
+    })),
+    substitute_note: (recommendation.substitutions || [])[0]
+      ? `${recommendation.substitutions[0].productDisplayName} is the backup if the first choice sells through.`
+      : ""
+  };
+}
+
+async function generateOutfitEmailCopy({ firstName = "", recommendation }) {
+  if (!recommendation?.outfit?.length) throw httpError(400, "A recommendation with outfit items is required.");
+  const fallback = fallbackOutfitEmailCopy({ firstName, recommendation });
+  if (!OPENAI_API_KEY) return { ...fallback, source: "local" };
+
+  const store = recommendation.store || "your selected store";
+  let output;
+  try {
+    output = await chatJson([
+      {
+        role: "system",
+        content: "You are a RetailNext stylist writing personalized triggered email copy. Return only valid JSON."
+      },
+      {
+        role: "user",
+        content: `Write polished, specific, customer-facing copy for an API-triggered outfit email.
+Use the exact products and facts below. Explain why the exact clothing items work together: color, formality, event fit, seasonality, inventory urgency, and how the starter item anchors the outfit.
+
+Customer first name: ${firstName || "(unknown)"}
+Event: ${recommendation.event}
+Style preference: ${recommendation.style}
+Store: ${store}
+Urgency: ${urgencyLabel(recommendation.urgency)}
+Basket value: $${recommendation.business?.basketValue || 0}
+Available today: ${recommendation.business?.availableToday || 0}/${recommendation.outfit.length}
+Starter item: ${recommendation.reference?.productDisplayName || recommendation.analysis?.item}
+Starter attributes: ${JSON.stringify(recommendation.analysis?.structuredAttributes || {})}
+
+Outfit items:
+${recommendation.outfit.map((product) => `- id ${product.id}: ${product.productDisplayName}; role ${product.role}; ${product.articleType}; ${product.baseColour}; season ${product.season}; usage ${product.usage}; price $${product.price}; ${inventoryCount(product, store)} in ${store}; fit ${product.score || 90}; reason ${product.why || ""}`).join("\n")}
+
+Substitute options:
+${(recommendation.substitutions || []).slice(0, 2).map((product) => `- id ${product.id}: ${product.productDisplayName}; substitute for id ${product.forProductId}; ${product.articleType}; ${product.baseColour}; price $${product.price}; ${inventoryCount(product, store)} in ${store}`).join("\n") || "- none"}
+
+Return only JSON with:
+{
+  "email_subject": "under 58 characters",
+  "preheader": "under 110 characters",
+  "hero_headline": "specific headline",
+  "hero_intro": "one sentence",
+  "outfit_story": "two concise sentences",
+  "starter_note": "one sentence",
+  "associate_note": "one sentence",
+  "cta_label": "short button label",
+  "items": [{ "id": "matching product id", "why": "one sentence", "pairing_note": "one short sentence" }],
+  "substitute_note": "one sentence or empty string"
+}
+
+Constraints:
+- Do not invent products, prices, colors, inventory, stores, reservations, purchases, holds, or delivery promises.
+- Do not say an item is available today unless the count above supports it.
+- Mention the selected store only when using the exact store name above.
+- Keep the tone premium retail stylist: direct, useful, and specific.
+- The items array must include each outfit product id exactly once: ${recommendation.outfit.map((product) => product.id).join(", ")}.`
+      }
+    ], 1300);
+  } catch {
+    return { ...fallback, source: "local" };
+  }
+
+  return {
+    email_subject: compactText(output.email_subject, fallback.email_subject).slice(0, 58),
+    preheader: compactText(output.preheader, fallback.preheader).slice(0, 110),
+    hero_headline: compactText(output.hero_headline, fallback.hero_headline),
+    hero_intro: compactText(output.hero_intro, fallback.hero_intro),
+    outfit_story: compactText(output.outfit_story, fallback.outfit_story),
+    starter_note: compactText(output.starter_note, fallback.starter_note),
+    associate_note: compactText(output.associate_note, fallback.associate_note),
+    cta_label: compactText(output.cta_label, fallback.cta_label),
+    items: Array.isArray(output.items) ? output.items : fallback.items,
+    substitute_note: compactText(output.substitute_note, fallback.substitute_note),
+    source: "openai"
+  };
+}
+
+function itemCopyForProduct(emailCopy, fallbackCopy, product) {
+  const item = (emailCopy.items || []).find((entry) => String(entry.id) === String(product.id));
+  const fallback = (fallbackCopy.items || []).find((entry) => String(entry.id) === String(product.id)) || {};
+  return {
+    why: compactText(item?.why, fallback.why || product.why),
+    pairing_note: compactText(item?.pairing_note, fallback.pairing_note)
+  };
+}
+
+function buildBrazeTriggerProperties({ firstName = "", recommendation, emailCopy }) {
+  const fallbackCopy = fallbackOutfitEmailCopy({ firstName, recommendation });
+  const store = recommendation.store || "your selected store";
+  const outfit = (recommendation.outfit || []).slice(0, 4);
+  const starterImage = absoluteImageUrl(recommendation.reference);
+  const props = {
+    email_subject: compactText(emailCopy.email_subject, fallbackCopy.email_subject),
+    customer_first_name: compactText(firstName, "there"),
+    preheader: compactText(emailCopy.preheader, fallbackCopy.preheader),
+    hero_headline: compactText(emailCopy.hero_headline, fallbackCopy.hero_headline),
+    hero_intro: compactText(emailCopy.hero_intro, fallbackCopy.hero_intro),
+    outfit_story: compactText(emailCopy.outfit_story, fallbackCopy.outfit_story),
+    cta_label: compactText(emailCopy.cta_label, "View and refine this look"),
+    cta_url: PUBLIC_APP_URL,
+    event_name: compactText(recommendation.event, "Your event"),
+    style_preference: compactText(recommendation.style, "Your style"),
+    store_name: store,
+    urgency_label: urgencyLabel(recommendation.urgency),
+    basket_value: recommendation.business?.basketValue || outfit.reduce((sum, product) => sum + Number(product.price || 0), 0),
+    outfit_count: recommendation.outfit?.length || outfit.length,
+    available_today_count: recommendation.business?.availableToday || outfit.filter((product) => inventoryCount(product, store) > 0).length,
+    starter_item_name: compactText(recommendation.reference?.productDisplayName || recommendation.analysis?.item, "Starter item"),
+    starter_note: compactText(emailCopy.starter_note, fallbackCopy.starter_note),
+    associate_note: compactText(emailCopy.associate_note, fallbackCopy.associate_note),
+    footer_store_line: `Built from your ${store} availability, event, budget, and style preferences.`
+  };
+  if (starterImage) props.starter_image_url = starterImage;
+
+  outfit.forEach((product, index) => {
+    const number = index + 1;
+    const itemCopy = itemCopyForProduct(emailCopy, fallbackCopy, product);
+    props[`item_${number}_name`] = product.productDisplayName;
+    props[`item_${number}_role`] = titleCase(product.role || product.articleType || "Outfit piece");
+    props[`item_${number}_image_url`] = absoluteImageUrl(product);
+    props[`item_${number}_meta`] = `${product.articleType || "Item"} / ${product.baseColour || "Colour"} / ${inventoryCount(product, store)} in store`;
+    props[`item_${number}_why`] = itemCopy.why;
+    props[`item_${number}_pairing_note`] = itemCopy.pairing_note;
+    props[`item_${number}_price`] = product.price || 0;
+    props[`item_${number}_fit_score`] = product.score || 90;
+  });
+
+  const substitute = (recommendation.substitutions || [])[0];
+  if (substitute) {
+    const forItem = (recommendation.outfit || []).find((product) => product.id === substitute.forProductId);
+    props.substitute_1_name = substitute.productDisplayName;
+    props.substitute_1_image_url = absoluteImageUrl(substitute);
+    props.substitute_1_for_item_name = forItem?.productDisplayName || "an item";
+    props.substitute_1_inventory_count = inventoryCount(substitute, store);
+    props.substitute_1_note = compactText(emailCopy.substitute_note, fallbackCopy.substitute_note);
+  }
+
+  return Object.fromEntries(Object.entries(props).filter(([, value]) => value !== "" && value !== undefined && value !== null));
+}
+
+async function sendOutfitEmail({ email, firstName = "", recommendation }) {
+  if (!isValidEmail(email)) throw httpError(400, "Enter a valid email address.");
+  if (!recommendation?.outfit?.length) throw httpError(400, "Generate an outfit before sending an email.");
+  if (!BRAZE_REST_ENDPOINT || !BRAZE_REST_API_KEY || !BRAZE_OUTFIT_EMAIL_CAMPAIGN_ID) {
+    throw httpError(503, "Braze email delivery is not configured.");
+  }
+
+  // Generation pass: OpenAI turns the grounded basket into rich email copy while app code keeps product, price, inventory, and image facts deterministic.
+  const emailCopy = await generateOutfitEmailCopy({ firstName, recommendation });
+  const triggerProperties = buildBrazeTriggerProperties({ firstName, recommendation, emailCopy });
+  // Braze delivery layer: send only campaign trigger properties, letting the saved Liquid template render the final email.
+  const response = await fetch(`${BRAZE_REST_ENDPOINT.replace(/\/$/, "")}/campaigns/trigger/send`, {
+    method: "POST",
+    headers: {
+      "authorization": `Bearer ${BRAZE_REST_API_KEY}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      campaign_id: BRAZE_OUTFIT_EMAIL_CAMPAIGN_ID,
+      broadcast: false,
+      recipients: [
+        {
+          email,
+          prioritization: ["identified", "most_recently_updated"],
+          send_to_existing_only: false,
+          attributes: {
+            email,
+            ...(firstName ? { first_name: firstName } : {})
+          },
+          trigger_properties: triggerProperties
+        }
+      ]
+    })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw httpError(502, payload.message || payload.error || `Braze returned ${response.status}`);
+  }
+  return {
+    ok: true,
+    dispatchId: payload.dispatch_id || payload.dispatchId || "",
+    emailCopySource: emailCopy.source
+  };
 }
 
 async function runChatAgent(payload) {
@@ -1624,10 +1884,24 @@ export async function handler(req, res) {
       for await (const chunk of req) body += chunk;
       return jsonResponse(res, 200, await runChatAgent(JSON.parse(body || "{}")));
     }
+    if (req.method === "POST" && url.pathname === "/api/send-outfit-email") {
+      let body = "";
+      for await (const chunk of req) body += chunk;
+      const payload = JSON.parse(body || "{}");
+      if (!isValidEmail(payload.email)) return jsonResponse(res, 400, { error: "Enter a valid email address." });
+      if (!payload.currentRecommendation?.outfit?.length) {
+        return jsonResponse(res, 400, { error: "Generate an outfit before sending an email." });
+      }
+      return jsonResponse(res, 200, await sendOutfitEmail({
+        email: String(payload.email).trim(),
+        firstName: compactText(payload.firstName),
+        recommendation: payload.currentRecommendation
+      }));
+    }
     return serveStatic(req, res);
   } catch (error) {
     console.error(error);
-    return jsonResponse(res, 500, { error: error.message });
+    return jsonResponse(res, error.statusCode || 500, { error: error.message });
   }
 }
 

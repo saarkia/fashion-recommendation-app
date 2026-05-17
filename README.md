@@ -23,11 +23,21 @@ Open `http://localhost:4173`.
 
 The app also works without `OPENAI_API_KEY`; it uses the local fallback path.
 
+Optional Braze email delivery is configured server-side with:
+
+```bash
+BRAZE_REST_ENDPOINT="https://rest.fra-02.braze.eu"
+BRAZE_REST_API_KEY="..."
+BRAZE_OUTFIT_EMAIL_CAMPAIGN_ID="..."
+PUBLIC_APP_URL="https://fashion-recommendation-app.vercel.app"
+```
+
 ## Deploy To Vercel
 
 1. Push this repository to GitHub.
 2. Import the repo in Vercel.
 3. Add `OPENAI_API_KEY` as an environment variable if you want the AI-powered path.
-4. Deploy.
+4. Add the Braze environment variables above if you want Mira to send triggered outfit emails.
+5. Deploy.
 
 The included `vercel.json` routes all requests through the Node handler in `server/index.mjs`.
