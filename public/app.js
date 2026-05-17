@@ -18,7 +18,9 @@ const state = {
       preferences: []
     },
     preview: null,
+    previewSwap: null,
     previewChangedProductIds: [],
+    suggestedPrompts: [],
     isBusy: false
   }
 };
@@ -223,7 +225,9 @@ function resetChat() {
       preferences: []
     },
     preview: null,
+    previewSwap: null,
     previewChangedProductIds: [],
+    suggestedPrompts: [],
     isBusy: false
   };
   state.changedProductIds = [];
@@ -313,6 +317,32 @@ function recommendationChatIntro(data) {
   ].filter(Boolean).join("\n\n");
 }
 
+function promptButtonsMarkup(prompts) {
+  return (prompts || [])
+    .slice(0, 2)
+    .map((prompt) => `<button type="button">${escapeHtml(prompt)}</button>`)
+    .join("");
+}
+
+function swapPreviewMarkup(swap) {
+  if (!swap?.from || !swap?.to) return "";
+  return `
+    <div class="swap-preview" aria-label="Previewed item swap">
+      <div class="swap-item">
+        <img src="${escapeHtml(swap.from.image || "")}" alt="${escapeHtml(swap.from.productDisplayName || "Current item")}" />
+        <span>Current</span>
+        <strong>${escapeHtml(swap.from.productDisplayName || "Current item")}</strong>
+      </div>
+      <div class="swap-arrow" aria-hidden="true">→</div>
+      <div class="swap-item">
+        <img src="${escapeHtml(swap.to.image || "")}" alt="${escapeHtml(swap.to.productDisplayName || "New item")}" />
+        <span>New</span>
+        <strong>${escapeHtml(swap.to.productDisplayName || "New item")}</strong>
+      </div>
+    </div>
+  `;
+}
+
 function renderChat() {
   const hasRecommendation = Boolean(state.latest?.outfit?.length);
   const hasOpenAI = Boolean(state.bootstrap?.hasOpenAI);
@@ -353,6 +383,7 @@ function renderChat() {
         <p class="eyebrow">Preview update</p>
         <strong>$${basketValue} basket</strong>
         <span>${escapeHtml(available)} available today</span>
+        ${swapPreviewMarkup(state.chat.previewSwap)}
         <div class="preview-actions">
           <button type="button" data-chat-action="apply">Apply changes</button>
           <button type="button" data-chat-action="reject">Keep current</button>
@@ -366,6 +397,7 @@ function renderChat() {
   }
 
   els.chatMessages.innerHTML = messages.join("") || `<div class="chat-empty">Generate an outfit, then I'll explain the recommendation and help refine it like a store stylist.</div>`;
+  els.quickPrompts.innerHTML = promptButtonsMarkup(state.chat.suggestedPrompts);
   els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
 }
 
@@ -495,6 +527,7 @@ function renderResult(data, options = {}) {
   if (options.seedChat) {
     state.chat.history = [{ role: "assistant", content: recommendationChatIntro(data) }];
   }
+  state.chat.suggestedPrompts = data.suggestedPrompts || state.chat.suggestedPrompts || [];
   els.productGrid.classList.remove("is-process");
   const attrs = data.analysis.structuredAttributes;
   const liveSteps = [data.ai?.imageAnalysis, data.ai?.queryEmbeddings, data.ai?.copyGeneration, data.ai?.recommendationReview].filter((step) => step === "openai").length;
@@ -624,6 +657,7 @@ async function sendChatMessage(message) {
   const trimmed = String(message || "").trim();
   if (!trimmed || !state.latest || state.chat.isBusy || !state.bootstrap?.hasOpenAI) return;
   state.chat.preview = null;
+  state.chat.previewSwap = null;
   state.chat.previewChangedProductIds = [];
   state.chat.history.push({ role: "user", content: trimmed });
   state.chat.isBusy = true;
@@ -644,9 +678,11 @@ async function sendChatMessage(message) {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Chat request failed");
     state.chat.chatState = data.chatState || state.chat.chatState;
+    state.chat.suggestedPrompts = data.suggestedPrompts || state.chat.suggestedPrompts;
     state.chat.history.push({ role: "assistant", content: data.assistantMessage || "I checked the basket." });
     if (data.action === "preview_update" && data.previewRecommendation) {
       state.chat.preview = data.previewRecommendation;
+      state.chat.previewSwap = data.previewSwap || null;
       state.chat.previewChangedProductIds = data.changedProductIds || [];
     }
   } catch (error) {
@@ -663,6 +699,7 @@ function applyChatPreview() {
   const preview = state.chat.preview;
   const changedProductIds = state.chat.previewChangedProductIds;
   state.chat.preview = null;
+  state.chat.previewSwap = null;
   state.chat.previewChangedProductIds = [];
   state.chat.history.push({ role: "assistant", content: "Applied the previewed basket update." });
   renderResult(preview, { changedProductIds });
@@ -670,6 +707,7 @@ function applyChatPreview() {
 
 function rejectChatPreview() {
   state.chat.preview = null;
+  state.chat.previewSwap = null;
   state.chat.previewChangedProductIds = [];
   state.chat.history.push({ role: "assistant", content: "No problem. I kept the current basket unchanged." });
   renderChat();

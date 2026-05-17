@@ -832,6 +832,16 @@ ol {
   margin-top: 12px;
 }
 
+.quick-prompts:not([hidden])::before {
+  content: "Suggested by Mira";
+  flex: 0 0 100%;
+  color: #137333;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 .quick-prompts button,
 .preview-actions button,
 .chat-form button {
@@ -898,6 +908,52 @@ ol {
 .preview-actions button {
   border-radius: 6px;
   padding: 7px 9px;
+}
+
+.swap-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  border: 1px solid #deded8;
+  background: #fafaf7;
+  padding: 10px;
+}
+
+.swap-item {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.swap-item img {
+  width: 100%;
+  height: 82px;
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid #ededed;
+}
+
+.swap-item span {
+  margin: 0;
+  color: #6c6c6c;
+  font-size: 0.64rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.swap-item strong {
+  color: #111;
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
+.swap-arrow {
+  color: #111;
+  font-size: 1.2rem;
+  font-weight: 900;
 }
 
 .chat-process {
@@ -2665,5 +2721,14 @@ input[type="range"] {
 
   .preview-actions button {
     flex: 1 1 136px;
+  }
+
+  .swap-preview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .swap-arrow {
+    justify-self: center;
+    transform: rotate(90deg);
   }
 }

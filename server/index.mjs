@@ -1233,7 +1233,7 @@ async function recommend(payload) {
     product.why = generatedCopy.itemReasons[String(product.id)] || generatedCopy.itemReasons[product.id] || product.why;
   }
 
-  return {
+  const recommendation = {
     analysis: {
       item: reference.productDisplayName,
       structuredAttributes: {
@@ -1281,6 +1281,8 @@ async function recommend(payload) {
       ai.recommendationReview === "openai" ? "OpenAI performs the final guardrail review: does the outfit work, and does the explanation match the actual products?" : "Local fallback uses rule-based recommendation rationales."
     ]
   };
+  recommendation.suggestedPrompts = await suggestFollowUpPrompts({ recommendation });
+  return recommendation;
 }
 
 const chatTools = [
@@ -1357,13 +1359,80 @@ ${JSON.stringify(chatState)}
 Use tools when you need catalog truth. If the customer asks "why", call explain_basket. If they express likes/dislikes or ask for changes, call record_preferences and/or find_alternatives. Do not invent products.`;
 }
 
+function productPreview(product) {
+  if (!product) return null;
+  return {
+    id: product.id,
+    role: product.role,
+    productDisplayName: product.productDisplayName,
+    articleType: product.articleType,
+    baseColour: product.baseColour,
+    price: product.price,
+    image: product.image
+  };
+}
+
+function fallbackFollowUpPrompts(recommendation) {
+  const outfit = recommendation?.outfit || [];
+  const hasShoes = outfit.some((product) => productGroup(product.articleType, product.subCategory) === "shoe");
+  const prompts = [
+    hasShoes ? "Can we change the shoes?" : "Can we swap one item?",
+    (recommendation?.business?.basketValue || 0) > 220 ? "Can you make it cheaper?" : "Can you make it more polished?"
+  ];
+  return [...new Set(prompts)].slice(0, 2);
+}
+
+async function suggestFollowUpPrompts({ recommendation, lastMessage = "" }) {
+  const fallback = fallbackFollowUpPrompts(recommendation);
+  if (!OPENAI_API_KEY || !recommendation?.outfit?.length) return fallback;
+
+  try {
+    const output = await chatJson([
+      {
+        role: "system",
+        content: "Return only valid JSON. Create exactly two short shopper follow-up prompts for a fashion stylist chat."
+      },
+      {
+        role: "user",
+        content: `Suggest two natural next messages the shopper might tap.
+
+Rules:
+- Address the shopper's likely next action.
+- Keep each prompt under 8 words.
+- Do not repeat the last shopper message.
+- Make prompts specific to this basket when useful.
+- Good examples: "Can we change the shoes?", "Can you make it cheaper?", "Any brighter options?"
+
+Last shopper message: ${lastMessage || "(none)"}
+Event: ${recommendation.event}
+Style: ${recommendation.style}
+Store: ${recommendation.store}
+Basket value: $${recommendation.business?.basketValue || 0}
+Available today: ${recommendation.business?.availableToday || 0}/${recommendation.outfit.length}
+Outfit:
+${recommendation.outfit.map((product) => `- ${product.role}: ${product.productDisplayName}; ${product.articleType}; ${product.baseColour}; $${product.price}`).join("\n")}
+
+Return JSON:
+{ "prompts": ["first prompt", "second prompt"] }`
+      }
+    ], 300);
+    const prompts = Array.isArray(output.prompts)
+      ? output.prompts.map((prompt) => String(prompt).trim()).filter(Boolean)
+      : [];
+    return prompts.length >= 2 ? prompts.slice(0, 2) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 async function runChatAgent(payload) {
   const recommendation = payload.currentRecommendation;
   if (!recommendation?.outfit?.length) {
     return {
       assistantMessage: "Generate an outfit first, then I can explain it or help refine alternatives.",
       action: "answer",
-      chatState: payload.chatState || {}
+      chatState: payload.chatState || {},
+      suggestedPrompts: []
     };
   }
 
@@ -1442,7 +1511,13 @@ async function runChatAgent(payload) {
         ai.errors.push(`Chat explanation fallback: ${error.message}`);
       }
     }
-    return { assistantMessage, action: "answer", chatState, ai };
+    return {
+      assistantMessage,
+      action: "answer",
+      chatState,
+      suggestedPrompts: await suggestFollowUpPrompts({ recommendation, lastMessage: message }),
+      ai
+    };
   }
 
   const { target, candidates } = await findAlternativeProducts({
@@ -1458,6 +1533,7 @@ async function runChatAgent(payload) {
       action: "answer",
       chatState,
       alternatives: [],
+      suggestedPrompts: await suggestFollowUpPrompts({ recommendation, lastMessage: message }),
       ai
     };
   }
@@ -1471,6 +1547,7 @@ async function runChatAgent(payload) {
     changeSummary,
     ai
   });
+  previewRecommendation.suggestedPrompts = await suggestFollowUpPrompts({ recommendation: previewRecommendation, lastMessage: message });
   const assistantMessage = `I found a better option to preview: swap ${target.productDisplayName} for ${replacement.productDisplayName}. It keeps the basket grounded in local inventory and better matches "${wantsAlternative.arguments?.goal || inferred.goal}".`;
 
   return {
@@ -1478,8 +1555,13 @@ async function runChatAgent(payload) {
     action: "preview_update",
     chatState,
     previewRecommendation,
+    previewSwap: {
+      from: productPreview(target),
+      to: productPreview(replacement)
+    },
     changedProductIds: [target.id, replacement.id],
     alternatives: candidates,
+    suggestedPrompts: previewRecommendation.suggestedPrompts,
     ai
   };
 }
