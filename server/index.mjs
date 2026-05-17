@@ -660,6 +660,8 @@ function inferChatIntent(message, recommendation, chatState = {}) {
 
   return {
     wantsExplanation: /\b(why|explain|rationale|reason)\b/.test(text),
+    wantsAvailabilityLookup: /\b(do you have|have any|in stock|stock check|find me|looking for|is there|are there|available at|available in|in store|specific item)\b/.test(text)
+      && !/\b(swap|change|replace|alternative|different)\b/.test(text),
     wantsChange: Boolean(target) || /\b(cheaper|formal|casual|swap|change|replace|alternative|different|available)\b/.test(text),
     targetProductId: target?.id || null,
     targetRole: target?.role || null,
@@ -701,6 +703,88 @@ function explainCurrentBasket(recommendation) {
     ...(recommendation?.outfit || []).map((product) => `${product.productDisplayName}: ${product.why}`)
   ].filter(Boolean);
   return lines.join("\n");
+}
+
+function productLookupPreview(product, store, reason = "") {
+  return {
+    ...productPreview(product),
+    usage: product.usage,
+    season: product.season,
+    inventoryCount: inventoryCount(product, store),
+    status: inventoryCount(product, store) > 0 ? "Available in store" : "Not in this store today",
+    reason
+  };
+}
+
+function keywordAvailabilityScore(product, query) {
+  const haystack = [
+    product.productDisplayName,
+    product.articleType,
+    product.baseColour,
+    product.subCategory,
+    product.usage,
+    product.season,
+    product.gender
+  ].join(" ").toLowerCase();
+  const tokens = String(query || "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 2);
+  if (!tokens.length) return 0;
+  return tokens.reduce((score, token) => score + (haystack.includes(token) ? 1 : 0), 0) / tokens.length;
+}
+
+async function findStoreAvailability({ recommendation, message, query }) {
+  const event = eventByLabel(recommendation.event);
+  const style = styleByLabel(recommendation.style);
+  const store = recommendation.store;
+  const reference = recommendation.reference;
+  const analysis = analysisForRecommendation(recommendation);
+  const gender = analysis.gender || reference.gender;
+  const queryText = compactText(query || message);
+  let queryVector = null;
+
+  try {
+    if (OPENAI_API_KEY) {
+      [queryVector] = await getOpenAIEmbeddings([`Retail catalog availability search: ${queryText}. Event: ${event.label}. Style: ${style.label}.`]);
+    }
+  } catch {
+    queryVector = null;
+  }
+
+  const ranked = products
+    .filter((product) => sameAudience(product, gender))
+    .map((product) => {
+      const semantic = queryVector ? dot(getVector(product.index), queryVector) : 0;
+      const keyword = keywordAvailabilityScore(product, queryText);
+      const stock = inventoryCount(product, store);
+      const eventFit = event.usages.includes(product.usage) || event.seasons.includes(product.season) ? 0.08 : 0;
+      const styleFit = style.colours.includes(product.baseColour) || style.usages.includes(product.usage) ? 0.05 : 0;
+      const stockBoost = stock > 0 ? 0.14 : -0.05;
+      const score = (semantic * 0.72) + (keyword * 0.32) + eventFit + styleFit + stockBoost;
+      return { product, score, keyword, stock };
+    })
+    .filter((item) => item.score > 0.08 || item.keyword > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6);
+
+  const matches = ranked.slice(0, 4).map((item) => productLookupPreview(
+    item.product,
+    store,
+    item.stock > 0
+      ? `${item.product.articleType} match with ${item.stock} available at ${store}.`
+      : `${item.product.articleType} match, but no local stock at ${store} today.`
+  ));
+  const inStore = matches.filter((item) => item.inventoryCount > 0);
+  return {
+    query: queryText,
+    store,
+    matches,
+    inStoreCount: inStore.length,
+    summary: inStore.length
+      ? `I found ${inStore.length} locally available match${inStore.length === 1 ? "" : "es"} for "${queryText}" at ${store}.`
+      : `I found related catalog items for "${queryText}", but none of the top matches are in stock at ${store} today.`
+  };
 }
 
 async function findAlternativeProducts({ recommendation, chatState, args, message }) {
@@ -863,7 +947,7 @@ async function finalizeRecommendationPreview({ recommendation, outfit, changeSum
     product.why = generatedCopy.itemReasons?.[String(product.id)] || generatedCopy.itemReasons?.[product.id] || product.why;
   }
 
-  return {
+  const preview = {
     ...recommendation,
     analysis: {
       ...recommendation.analysis,
@@ -896,6 +980,8 @@ async function finalizeRecommendationPreview({ recommendation, outfit, changeSum
       "OpenAI stylist chat uses tool calling to explain, capture preferences, retrieve alternatives, and preview basket updates."
     ].slice(-7)
   };
+  preview.agent = await generateAgentMission(preview);
+  return preview;
 }
 
 function pickInspiration() {
@@ -1285,6 +1371,7 @@ async function recommend(payload) {
       ai.recommendationReview === "openai" ? "OpenAI performs the final guardrail review: does the outfit work, and does the explanation match the actual products?" : "Local fallback uses rule-based recommendation rationales."
     ]
   };
+  recommendation.agent = await generateAgentMission(recommendation);
   recommendation.suggestedPrompts = await suggestFollowUpPrompts({ recommendation });
   return recommendation;
 }
@@ -1331,6 +1418,19 @@ const chatTools = [
       required: ["goal"],
       additionalProperties: false
     }
+  },
+  {
+    type: "function",
+    name: "check_store_availability",
+    description: "Search RetailNext catalog and selected-store inventory for a specific item, style, colour, or product the shopper asks about.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "The shopper's requested item or style, such as silver heels, navy blazer, or yellow vacation sandals." }
+      },
+      required: ["query"],
+      additionalProperties: false
+    }
   }
 ];
 
@@ -1360,7 +1460,7 @@ ${(recommendation.outfit || []).map((product) => `- id ${product.id}: ${product.
 Remembered chat preferences:
 ${JSON.stringify(chatState)}
 
-Use tools when you need catalog truth. If the customer asks "why", call explain_basket. If they express likes/dislikes or ask for changes, call record_preferences and/or find_alternatives. Do not invent products.`;
+Use tools when you need catalog truth. If the customer asks "why", call explain_basket. If they ask whether a specific item/style/colour is in stock or say they are looking for something, call check_store_availability. If they express likes/dislikes or ask for changes, call record_preferences and/or find_alternatives. Do not invent products.`;
 }
 
 function productPreview(product) {
@@ -1377,6 +1477,10 @@ function productPreview(product) {
 }
 
 function fallbackFollowUpPrompts(recommendation) {
+  const agentPrompts = (recommendation?.agent?.nextSteps || [])
+    .map((step) => compactText(step.prompt))
+    .filter(Boolean);
+  if (agentPrompts.length >= 2) return [...new Set(agentPrompts)].slice(0, 2);
   const outfit = recommendation?.outfit || [];
   const hasShoes = outfit.some((product) => productGroup(product.articleType, product.subCategory) === "shoe");
   const prompts = [
@@ -1418,6 +1522,8 @@ Style: ${recommendation.style}
 Store: ${recommendation.store}
 Basket value: $${recommendation.business?.basketValue || 0}
 Available today: ${recommendation.business?.availableToday || 0}/${recommendation.outfit.length}
+Mira next-step plan:
+${(recommendation.agent?.nextSteps || []).map((step) => `- ${step.label}: ${step.prompt}; ${step.rationale}`).join("\n") || "- none"}
 Outfit:
 ${recommendation.outfit.map((product) => `- ${product.role}: ${product.productDisplayName}; ${product.articleType}; ${product.baseColour}; $${product.price}`).join("\n")}
 
@@ -1473,6 +1579,126 @@ function absoluteImageUrl(product) {
 
 function compactText(value, fallback = "") {
   return String(value || fallback || "").replace(/\s+/g, " ").trim();
+}
+
+function fallbackAgentMission(recommendation) {
+  const outfit = recommendation?.outfit || [];
+  const store = recommendation?.store || "your selected store";
+  const availableToday = recommendation?.business?.availableToday || outfit.filter((product) => inventoryCount(product, store) > 0).length;
+  const lowStock = outfit.filter((product) => {
+    const count = inventoryCount(product, store);
+    return count > 0 && count <= 2;
+  });
+  const substitutions = recommendation?.substitutions || [];
+  const riskLevel = availableToday < outfit.length || lowStock.length ? "medium" : "low";
+  const riskLabel = riskLevel === "low" ? "Low stock risk" : "Watch local stock";
+  const firstRisk = lowStock[0] || outfit.find((product) => inventoryCount(product, store) === 0);
+  const nextSteps = [
+    firstRisk
+      ? {
+          label: "Protect the basket",
+          prompt: `Swap the ${firstRisk.role || firstRisk.articleType}`,
+          rationale: `${firstRisk.productDisplayName} is the item most likely to create a dead-end journey.`
+        }
+      : {
+          label: "Stress-test availability",
+          prompt: "Check similar items in store",
+          rationale: "Use the agent to confirm specific items before the shopper visits."
+        },
+    {
+      label: "Send the look",
+      prompt: "Email this outfit",
+      rationale: "Give the shopper a saved outfit with item-by-item rationale and store context."
+    }
+  ];
+  return {
+    headline: "Event rescue plan",
+    mission: `Keep this ${String(recommendation?.event || "event").toLowerCase()} basket complete, current, and findable at ${store}.`,
+    riskLevel,
+    riskLabel,
+    availabilitySummary: `${availableToday}/${outfit.length} recommended items available today at ${store}.`,
+    styleSignal: `${recommendation?.style || "Selected"} styling anchored by ${recommendation?.reference?.productDisplayName || recommendation?.analysis?.item || "the starter item"}.`,
+    nextSteps,
+    storeHandoff: recommendation?.business?.associatePrompt || "",
+    businessSignal: substitutions.length
+      ? `Missed demand prevented: ${substitutions.length} substitute${substitutions.length === 1 ? "" : "s"} ready before the shopper hits an out-of-stock item.`
+      : "Demand signal captured: event-led shopping intent is tied to local inventory and associate follow-up."
+  };
+}
+
+async function generateAgentMission(recommendation) {
+  const fallback = fallbackAgentMission(recommendation);
+  if (!OPENAI_API_KEY || !recommendation?.outfit?.length) return { ...fallback, source: "local" };
+  try {
+    const output = await chatJson([
+      {
+        role: "system",
+        content: "You are Mira, RetailNext's OpenAI-powered event stylist. Return only valid JSON."
+      },
+      {
+        role: "user",
+        content: `Create a proactive agent mission card for the shopper and store associate.
+
+Business problem: RetailNext shoppers leave poor reviews when they cannot find updated styles or specific items in stores for upcoming events.
+
+Use only the facts below. Do not invent products, prices, stores, holds, reservations, or purchases.
+Address the shopper directly as "you" where appropriate.
+
+Event: ${recommendation.event}
+Style: ${recommendation.style}
+Store: ${recommendation.store}
+Urgency: ${urgencyLabel(recommendation.urgency)}
+Basket value: $${recommendation.business?.basketValue || 0}
+Available today: ${recommendation.business?.availableToday || 0}/${recommendation.outfit.length}
+Starter: ${recommendation.reference?.productDisplayName || recommendation.analysis?.item}
+Current rationale: ${recommendation.analysis?.outfitRationale || ""}
+Low stock: ${(recommendation.business?.lowStockNotes || []).join("; ") || "none"}
+Substitutions: ${(recommendation.substitutions || []).slice(0, 3).map((product) => `${product.productDisplayName} for ${product.forProductId}; ${inventoryCount(product, recommendation.store)} in store`).join("; ") || "none"}
+Outfit:
+${recommendation.outfit.map((product) => `- ${product.role}: ${product.productDisplayName}; ${product.articleType}; ${product.baseColour}; $${product.price}; ${inventoryCount(product, recommendation.store)} in store; reason: ${product.why}`).join("\n")}
+
+Return JSON:
+{
+  "headline": "short card title",
+  "mission": "one direct sentence explaining what Mira is doing",
+  "riskLevel": "low | medium | high",
+  "riskLabel": "short human-readable risk label",
+  "availabilitySummary": "one sentence",
+  "styleSignal": "one sentence about updated/current/event fit",
+  "nextSteps": [
+    { "label": "2-4 words", "prompt": "short message the shopper could tap", "rationale": "why this helps" },
+    { "label": "2-4 words", "prompt": "short message the shopper could tap", "rationale": "why this helps" }
+  ],
+  "storeHandoff": "one sentence for an associate",
+  "businessSignal": "one sentence tying this session to demand, availability, or review prevention"
+}`
+      }
+    ], 850);
+    const nextSteps = Array.isArray(output.nextSteps)
+      ? output.nextSteps
+          .map((step) => ({
+            label: compactText(step.label),
+            prompt: compactText(step.prompt),
+            rationale: compactText(step.rationale)
+          }))
+          .filter((step) => step.label && step.prompt)
+          .slice(0, 2)
+      : fallback.nextSteps;
+    return {
+      headline: compactText(output.headline, fallback.headline),
+      mission: compactText(output.mission, fallback.mission),
+      riskLevel: ["low", "medium", "high"].includes(output.riskLevel) ? output.riskLevel : fallback.riskLevel,
+      riskLabel: compactText(output.riskLabel, fallback.riskLabel),
+      availabilitySummary: compactText(output.availabilitySummary, fallback.availabilitySummary),
+      styleSignal: compactText(output.styleSignal, fallback.styleSignal),
+      nextSteps: nextSteps.length ? nextSteps : fallback.nextSteps,
+      storeHandoff: compactText(output.storeHandoff, fallback.storeHandoff),
+      businessSignal: compactText(output.businessSignal, fallback.businessSignal),
+      source: "openai"
+    };
+  } catch {
+    return { ...fallback, source: "local" };
+  }
 }
 
 function fallbackOutfitEmailCopy({ firstName, recommendation }) {
@@ -1741,7 +1967,9 @@ async function runChatAgent(payload) {
   }
 
   if (!calls.length) {
-    calls = inferred.wantsChange
+    calls = inferred.wantsAvailabilityLookup
+      ? [{ name: "check_store_availability", arguments: { query: message } }]
+      : inferred.wantsChange
       ? [
           { name: "record_preferences", arguments: { preferences: inferred.preferences, lockedProductIds: inferred.lockedProductIds } },
           { name: "find_alternatives", arguments: { targetProductId: inferred.targetProductId, targetRole: inferred.targetRole, goal: inferred.goal } }
@@ -1751,6 +1979,51 @@ async function runChatAgent(payload) {
 
   for (const call of calls.filter((item) => item.name === "record_preferences")) {
     chatState = mergeChatState(chatState, call.arguments || {});
+  }
+
+  let availabilityCall = calls.find((item) => item.name === "check_store_availability");
+  if (!availabilityCall && inferred.wantsAvailabilityLookup) {
+    availabilityCall = { name: "check_store_availability", arguments: { query: message } };
+  }
+  if (availabilityCall) {
+    const lookupResults = await findStoreAvailability({
+      recommendation,
+      message,
+      query: availabilityCall.arguments?.query
+    });
+    let assistantMessage = lookupResults.summary;
+    if (lookupResults.matches.length) {
+      const first = lookupResults.matches[0];
+      assistantMessage += ` Strongest match: ${first.productDisplayName} — ${first.status.toLowerCase()}, $${first.price}.`;
+    }
+    if (OPENAI_API_KEY) {
+      try {
+        const copy = await chatJson([
+          { role: "system", content: "Return only valid JSON with an assistantMessage string. Be concise and do not invent inventory." },
+          {
+            role: "user",
+            content: `Rewrite this as Mira speaking directly to the shopper.
+
+Customer asked: ${message}
+Store: ${recommendation.store}
+Lookup summary: ${lookupResults.summary}
+Matches:
+${lookupResults.matches.map((item) => `- ${item.productDisplayName}; ${item.articleType}; ${item.baseColour}; $${item.price}; ${item.inventoryCount} in store; ${item.reason}`).join("\n")}`
+          }
+        ], 350);
+        assistantMessage = copy.assistantMessage || assistantMessage;
+      } catch (error) {
+        ai.errors.push(`Availability response fallback: ${error.message}`);
+      }
+    }
+    return {
+      assistantMessage,
+      action: "availability_lookup",
+      chatState,
+      lookupResults,
+      suggestedPrompts: await suggestFollowUpPrompts({ recommendation, lastMessage: message }),
+      ai
+    };
   }
 
   let wantsAlternative = calls.find((item) => item.name === "find_alternatives");

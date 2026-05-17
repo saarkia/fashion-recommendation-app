@@ -20,6 +20,7 @@ const state = {
     preview: null,
     previewSwap: null,
     previewChangedProductIds: [],
+    lookupResults: null,
     suggestedPrompts: [],
     pendingEmail: false,
     busyMessage: "",
@@ -237,6 +238,7 @@ function resetChat() {
     preview: null,
     previewSwap: null,
     previewChangedProductIds: [],
+    lookupResults: null,
     suggestedPrompts: [],
     pendingEmail: false,
     busyMessage: "",
@@ -355,6 +357,55 @@ function swapPreviewMarkup(swap) {
   `;
 }
 
+function agentMissionMarkup(agent) {
+  if (!agent) return "";
+  const nextSteps = (agent.nextSteps || [])
+    .slice(0, 2)
+    .map((step) => `
+      <li>
+        <strong>${escapeHtml(step.label || "Next step")}</strong>
+        <span>${escapeHtml(step.rationale || step.prompt || "")}</span>
+      </li>
+    `).join("");
+  return `
+    <section class="agent-mission ${escapeHtml(agent.riskLevel || "low")}" aria-label="Mira mission plan">
+      <div class="agent-mission-head">
+        <p class="eyebrow">${escapeHtml(agent.headline || "Mira mission")}</p>
+        <span>${escapeHtml(agent.riskLabel || "Stock risk checked")}</span>
+      </div>
+      <p class="mission-line">${escapeHtml(agent.mission || "")}</p>
+      <div class="mission-metrics">
+        <span>${escapeHtml(agent.availabilitySummary || "")}</span>
+        <span>${escapeHtml(agent.styleSignal || "")}</span>
+      </div>
+      ${nextSteps ? `<ul class="mission-actions">${nextSteps}</ul>` : ""}
+      ${agent.businessSignal ? `<p class="mission-signal">${escapeHtml(agent.businessSignal)}</p>` : ""}
+    </section>
+  `;
+}
+
+function availabilityLookupMarkup(lookup) {
+  if (!lookup?.matches?.length) return "";
+  const items = lookup.matches.slice(0, 3).map((item) => `
+    <article class="lookup-item">
+      <img src="${escapeHtml(item.image || "")}" alt="${escapeHtml(item.productDisplayName || "Catalog item")}" />
+      <div>
+        <strong>${escapeHtml(item.productDisplayName || "Catalog item")}</strong>
+        <span>${escapeHtml(item.articleType || "Item")} / ${escapeHtml(item.baseColour || "Colour")} / $${escapeHtml(item.price || 0)}</span>
+        <em>${escapeHtml(item.inventoryCount || 0)} in store</em>
+      </div>
+    </article>
+  `).join("");
+  return `
+    <section class="lookup-card" aria-label="Store availability lookup">
+      <p class="eyebrow">Store availability check</p>
+      <strong>${escapeHtml(lookup.store || "Selected store")}</strong>
+      <span>${escapeHtml(lookup.query || "")}</span>
+      <div class="lookup-items">${items}</div>
+    </section>
+  `;
+}
+
 function renderChat() {
   const hasRecommendation = Boolean(state.latest?.outfit?.length);
   const hasOpenAI = Boolean(state.bootstrap?.hasOpenAI);
@@ -381,11 +432,14 @@ function renderChat() {
     return;
   }
 
-  const messages = state.chat.history.map((entry) => `
+  const messages = [
+    agentMissionMarkup(state.latest?.agent),
+    ...state.chat.history.map((entry) => `
     <div class="chat-message ${entry.role === "user" ? "from-user" : "from-agent"}">
       ${escapeHtml(entry.role === "assistant" ? shopperFacingText(entry.content) : entry.content)}
     </div>
-  `);
+  `)
+  ].filter(Boolean);
 
   if (state.chat.preview) {
     const basketValue = state.chat.preview.business?.basketValue || 0;
@@ -402,6 +456,10 @@ function renderChat() {
         </div>
       </div>
     `);
+  }
+
+  if (state.chat.lookupResults) {
+    messages.push(availabilityLookupMarkup(state.chat.lookupResults));
   }
 
   if (state.chat.isBusy) {
@@ -687,6 +745,7 @@ async function sendChatMessage(message) {
   state.chat.preview = null;
   state.chat.previewSwap = null;
   state.chat.previewChangedProductIds = [];
+  state.chat.lookupResults = null;
   state.chat.history.push({ role: "user", content: trimmed });
   if (wantsEmail) {
     state.chat.suggestedPrompts = state.chat.suggestedPrompts.filter((prompt) => !isEmailIntent(prompt));
@@ -741,6 +800,9 @@ async function sendChatMessage(message) {
     state.chat.chatState = data.chatState || state.chat.chatState;
     state.chat.suggestedPrompts = data.suggestedPrompts || state.chat.suggestedPrompts;
     state.chat.history.push({ role: "assistant", content: data.assistantMessage || "I checked the basket." });
+    if (data.action === "availability_lookup" && data.lookupResults) {
+      state.chat.lookupResults = data.lookupResults;
+    }
     if (data.action === "preview_update" && data.previewRecommendation) {
       state.chat.preview = data.previewRecommendation;
       state.chat.previewSwap = data.previewSwap || null;
