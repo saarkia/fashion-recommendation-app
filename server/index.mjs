@@ -859,6 +859,88 @@ async function findAlternativeProducts({ recommendation, chatState, args, messag
   return { target, candidates };
 }
 
+async function previewSelectedLookupProduct({ recommendation, productId }) {
+  if (!recommendation?.outfit?.length) throw httpError(400, "Generate an outfit before selecting an item.");
+  const selectedProduct = products.find((product) => product.id === Number(productId));
+  if (!selectedProduct) throw httpError(404, "That catalog item is no longer available.");
+
+  const outfit = recommendation.outfit || [];
+  if (outfit.some((product) => product.id === selectedProduct.id)) {
+    return {
+      assistantMessage: `${selectedProduct.productDisplayName} is already in your current outfit.`,
+      action: "answer",
+      chatState: {},
+      suggestedPrompts: await suggestFollowUpPrompts({ recommendation, lastMessage: selectedProduct.productDisplayName })
+    };
+  }
+
+  const event = eventByLabel(recommendation.event);
+  const style = styleByLabel(recommendation.style);
+  const store = recommendation.store;
+  const urgency = recommendation.urgency;
+  const reference = recommendation.reference;
+  const analysis = analysisForRecommendation(recommendation);
+  const selectedGroup = productGroup(selectedProduct.articleType, selectedProduct.subCategory);
+  const target = outfit.find((product) => productGroup(product.articleType, product.subCategory) === selectedGroup)
+    || outfit.find((product) => product.articleType === selectedProduct.articleType)
+    || outfit[0];
+  if (!target) throw httpError(400, "There is no basket item to swap.");
+
+  const slot = roleSlotForProduct(target, target.role);
+  const gender = analysis.gender || reference.gender || selectedProduct.gender;
+  const eventVector = buildEventQueryVector(event, style, gender, slot);
+  const referenceVector = Number.isInteger(reference.index) ? getVector(reference.index) : eventVector;
+  const score = candidateScore(selectedProduct, {
+    reference,
+    referenceVector,
+    eventVector,
+    event,
+    style,
+    store,
+    urgency,
+    budgetMax: Math.max(selectedProduct.price + 80, recommendation.business?.basketValue || 300)
+  });
+  const fit = guardrail(reference, selectedProduct, event, store, urgency);
+  const replacement = {
+    ...selectedProduct,
+    role: target.role,
+    score: Math.round(clamp(score, 0, 1) * 100),
+    guardrail: fit,
+    why: whyThisWorks(selectedProduct, reference, event, store),
+    retrievalQuery: `Selected from store availability lookup for ${selectedProduct.articleType}`
+  };
+  const previewOutfit = outfit.map((product) => product.id === target.id ? replacement : product);
+  const ai = {
+    ...recommendation.ai,
+    errors: [...(recommendation.ai?.errors || [])],
+    chatAgent: "availability-selection"
+  };
+  const previewRecommendation = await finalizeRecommendationPreview({
+    recommendation,
+    outfit: previewOutfit,
+    changeSummary: `Preview: replace ${target.productDisplayName} with ${selectedProduct.productDisplayName} from the store availability lookup.`,
+    ai
+  });
+  previewRecommendation.suggestedPrompts = await suggestFollowUpPrompts({
+    recommendation: previewRecommendation,
+    lastMessage: `Use ${selectedProduct.productDisplayName}`
+  });
+
+  return {
+    assistantMessage: `I can preview ${selectedProduct.productDisplayName} in this outfit. It has ${inventoryCount(selectedProduct, store)} available at ${store}, so the swap stays grounded in local stock.`,
+    action: "preview_update",
+    chatState: {},
+    previewRecommendation,
+    previewSwap: {
+      from: productPreview(target),
+      to: productPreview(replacement)
+    },
+    changedProductIds: [target.id, replacement.id],
+    suggestedPrompts: previewRecommendation.suggestedPrompts,
+    ai: previewRecommendation.ai
+  };
+}
+
 function substitutionsForOutfit({ outfit, reference, event, style, store, urgency }) {
   const selected = new Set(outfit.map((product) => product.id));
   return outfit.flatMap((product) => {
@@ -2169,6 +2251,15 @@ export async function handler(req, res) {
         email: String(payload.email).trim(),
         firstName: compactText(payload.firstName),
         recommendation: payload.currentRecommendation
+      }));
+    }
+    if (req.method === "POST" && url.pathname === "/api/select-lookup-item") {
+      let body = "";
+      for await (const chunk of req) body += chunk;
+      const payload = JSON.parse(body || "{}");
+      return jsonResponse(res, 200, await previewSelectedLookupProduct({
+        recommendation: payload.currentRecommendation,
+        productId: payload.productId
       }));
     }
     return serveStatic(req, res);

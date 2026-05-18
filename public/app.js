@@ -387,14 +387,15 @@ function agentMissionMarkup(agent) {
 function availabilityLookupMarkup(lookup) {
   if (!lookup?.matches?.length) return "";
   const items = lookup.matches.slice(0, 3).map((item) => `
-    <article class="lookup-item">
+    <button class="lookup-item" type="button" data-lookup-product-id="${escapeHtml(item.id || "")}" data-lookup-product-name="${escapeHtml(item.productDisplayName || "this item")}">
       <img src="${escapeHtml(item.image || "")}" alt="${escapeHtml(item.productDisplayName || "Catalog item")}" />
       <div>
         <strong>${escapeHtml(item.productDisplayName || "Catalog item")}</strong>
         <span>${escapeHtml(item.articleType || "Item")} / ${escapeHtml(item.baseColour || "Colour")} / $${escapeHtml(item.price || 0)}</span>
         <em>${escapeHtml(item.inventoryCount || 0)} in store</em>
       </div>
-    </article>
+      <small>Preview swap</small>
+    </button>
   `).join("");
   return `
     <section class="lookup-card" aria-label="Store availability lookup">
@@ -737,6 +738,43 @@ async function sendOutfitEmailFromChat(email) {
   return data;
 }
 
+async function previewLookupSelection(productId, productName) {
+  if (!productId || state.chat.isBusy || !state.latest?.outfit?.length) return;
+  state.chat.preview = null;
+  state.chat.previewSwap = null;
+  state.chat.previewChangedProductIds = [];
+  state.chat.isBusy = true;
+  state.chat.busyMessage = `Previewing ${productName || "that item"} in your outfit...`;
+  renderChat();
+
+  try {
+    const response = await fetch("/api/select-lookup-item", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        productId,
+        currentRecommendation: state.latest
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "Could not preview that item");
+    state.chat.suggestedPrompts = data.suggestedPrompts || state.chat.suggestedPrompts;
+    state.chat.history.push({ role: "assistant", content: data.assistantMessage || "I built a preview with that item." });
+    if (data.action === "preview_update" && data.previewRecommendation) {
+      state.chat.preview = data.previewRecommendation;
+      state.chat.previewSwap = data.previewSwap || null;
+      state.chat.previewChangedProductIds = data.changedProductIds || [];
+    }
+  } catch (error) {
+    console.error(error);
+    state.chat.history.push({ role: "assistant", content: `I could not preview that item: ${error.message}` });
+  } finally {
+    state.chat.isBusy = false;
+    state.chat.busyMessage = "";
+    renderChat();
+  }
+}
+
 async function sendChatMessage(message) {
   const trimmed = String(message || "").trim();
   if (!trimmed || state.chat.isBusy || !state.bootstrap?.hasOpenAI) return;
@@ -873,6 +911,11 @@ els.quickPrompts.addEventListener("click", (event) => {
 });
 
 els.chatMessages.addEventListener("click", (event) => {
+  const lookupItem = event.target.closest("[data-lookup-product-id]");
+  if (lookupItem) {
+    previewLookupSelection(lookupItem.dataset.lookupProductId, lookupItem.dataset.lookupProductName);
+    return;
+  }
   const action = event.target.closest("[data-chat-action]")?.dataset.chatAction;
   if (action === "apply") applyChatPreview();
   if (action === "reject") rejectChatPreview();
