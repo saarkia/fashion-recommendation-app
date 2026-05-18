@@ -1,33 +1,33 @@
 const architectureContent = {
   intent: {
     title: "Shopper intent",
-    primitive: "Input surface",
+    primitive: "RetailNext frontend",
     body: "The customer starts from a starter item or uploaded image, then adds occasion, style preference, store, budget, and urgency.",
-    value: "The app captures the event mission before retrieval starts, so recommendations are based on the actual shopping need."
+    value: "RetailNext captures the event mission before retrieval starts, so every later OpenAI call is grounded in a specific shopping need."
   },
   understand: {
     title: "OpenAI understanding",
-    primitive: "Vision + Structured Outputs",
+    primitive: "OpenAI API: Vision + Structured Outputs",
     body: "OpenAI extracts item type, colours, formality, style direction, constraints, and required outfit slots from the customer input.",
-    value: "Those fields are machine-readable, so they can be passed into search, ranking, chat actions, associate notes, and eval checks."
+    value: "Those fields are machine-readable, so RetailNext can pass them into search, ranking, chat actions, associate notes, and eval checks."
   },
   retrieve: {
     title: "Embedding retrieval",
-    primitive: "text-embedding-3-large",
-    body: "The app converts the event and style intent into semantic search vectors, then retrieves matching products from the prepared RetailNext catalogue.",
-    value: "This helps find relevant styles even when the customer does not use exact product or category wording."
+    primitive: "OpenAI API + RetailNext catalogue",
+    body: "OpenAI creates embeddings for the event and style search phrases; RetailNext compares them with prepared product vectors and retrieves matching catalogue items.",
+    value: "This helps find relevant styles even when the customer does not use exact product or category wording, while SKU truth stays in RetailNext."
   },
   ground: {
     title: "Retail grounding",
-    primitive: "Deterministic business logic",
+    primitive: "RetailNext deterministic logic",
     body: "Ranking and filtering enforce store stock, available-today urgency, budget, product role, outfit completeness, and substitution rules.",
     value: "The model interprets the request; the application verifies what can actually be sold and fulfilled."
   },
   activate: {
     title: "Activation",
-    primitive: "Responses-style actions + generation",
-    body: "Mira converts chat into safe basket actions, creates associate handoff notes, writes Braze email copy, and highlights availability gaps.",
-    value: "The session can support the customer, the store associate, and merchandising follow-up."
+    primitive: "OpenAI generation + RetailNext actions",
+    body: "Mira uses OpenAI-generated language and action selection, while RetailNext validates basket changes, creates the associate handoff, sends Braze payloads, and highlights availability gaps.",
+    value: "The session can support the customer, the store associate, and merchandising follow-up without letting the model invent fulfilment facts."
   }
 };
 

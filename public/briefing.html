@@ -124,57 +124,70 @@
           <div class="brief-section-copy">
             <p class="eyebrow">03 Generate sequence</p>
             <h2>What happens when the customer clicks Generate outfit.</h2>
-            <p>This is the simplest technical walkthrough: frontend input, OpenAI interpretation, catalogue retrieval, deterministic grounding, then rendered output.</p>
+            <p>This is the simplest technical walkthrough: RetailNext captures and grounds the shopping mission, while OpenAI APIs handle the ambiguous interpretation, semantic retrieval inputs, and shopper-facing language.</p>
+          </div>
+
+          <div class="source-legend" aria-label="Responsibility legend">
+            <span class="source-chip retailnext">RetailNext owned</span>
+            <span class="source-chip openai">OpenAI API</span>
+            <span class="source-chip hybrid">OpenAI + RetailNext</span>
           </div>
 
           <div class="generate-sequence" aria-label="Generate outfit code sequence">
-            <article class="sequence-step">
+            <article class="sequence-step retailnext-owned">
               <span>1</span>
+              <div class="step-source"><em>RetailNext frontend</em></div>
               <h3>Frontend collects context</h3>
-              <p>Starter item or image, occasion, style, store, budget, and urgency.</p>
+              <p>The browser gathers the starter item or image, occasion, style, store, budget, and urgency. No OpenAI call has happened yet.</p>
               <code>public/app.js → requestRecommendations()</code>
             </article>
-            <article class="sequence-step">
+            <article class="sequence-step retailnext-owned">
               <span>2</span>
+              <div class="step-source"><em>RetailNext backend</em></div>
               <h3>API receives request</h3>
-              <p>The browser posts the shopping mission to the server recommendation route.</p>
+              <p>The browser posts that shopping mission to the server. The backend resolves event, style, store, budget, urgency, and starter-product context.</p>
               <code>POST /api/recommend</code>
             </article>
-            <article class="sequence-step">
+            <article class="sequence-step openai-owned">
               <span>3</span>
+              <div class="step-source"><em>OpenAI API</em></div>
               <h3>OpenAI structures intent</h3>
-              <p>Vision and structured output extract item attributes, event fit, slots, and search queries.</p>
+              <p>GPT-4o mini reads the starter image and returns structured JSON: item attributes, event fit, outfit roles, and suggested catalogue searches.</p>
               <code>analyzeReferenceWithOpenAI()</code>
             </article>
-            <article class="sequence-step">
+            <article class="sequence-step hybrid-owned">
               <span>4</span>
+              <div class="step-source"><em>OpenAI API + RetailNext vectors</em></div>
               <h3>Embeddings retrieve products</h3>
-              <p>Semantic queries are matched against prepared catalogue vectors.</p>
+              <p>OpenAI embeds the search phrases; RetailNext compares those vectors against prepared catalogue embeddings to find semantically relevant SKUs.</p>
               <code>text-embedding-3-large + cosine search</code>
             </article>
-            <article class="sequence-step">
+            <article class="sequence-step retailnext-owned">
               <span>5</span>
+              <div class="step-source"><em>RetailNext rules</em></div>
               <h3>Retail rules filter results</h3>
-              <p>Store stock, budget, urgency, product role, colour, and event suitability are scored.</p>
+              <p>RetailNext scores and filters by store stock, budget, urgency, product role, colour harmony, event suitability, and starter-item similarity.</p>
               <code>candidateScore() + guardrail()</code>
             </article>
-            <article class="sequence-step">
+            <article class="sequence-step hybrid-owned">
               <span>6</span>
+              <div class="step-source"><em>OpenAI copy + RetailNext facts</em></div>
               <h3>Basket is finalised</h3>
-              <p>The app creates item rationale, substitutions, availability summary, and business signals.</p>
-              <code>finalizeRecommendationPreview()</code>
+              <p>RetailNext calculates basket value, availability, substitutions, and KPIs; OpenAI writes grounded rationale and performs the final stylist QA review.</p>
+              <code>generateBusinessCopy() + reviewOutfitWithOpenAI()</code>
             </article>
-            <article class="sequence-step">
+            <article class="sequence-step retailnext-owned">
               <span>7</span>
+              <div class="step-source"><em>RetailNext UI</em></div>
               <h3>UI explains the result</h3>
-              <p>The customer sees outfit items, availability, AI understanding, grounding, and Mira chat.</p>
+              <p>The customer sees outfit items, availability, AI understanding, Mira chat, and the add-to-basket prompt. The UI renders only the grounded server response.</p>
               <code>renderResult()</code>
             </article>
           </div>
 
           <div class="sequence-output">
             <strong>Important boundary</strong>
-            <p>OpenAI proposes interpretation and language. RetailNext code decides which SKUs can be shown based on catalogue, price, stock, and fulfilment rules.</p>
+            <p>OpenAI proposes interpretation, embeddings, rationale, and language. RetailNext owns the request flow, catalogue data, SKU eligibility, price, stock, fulfilment rules, basket state, and what is ultimately shown.</p>
           </div>
         </section>
 
@@ -213,23 +226,23 @@
 
           <div class="system-boundary">
             <div>
-              <p class="eyebrow">Model layer</p>
+              <p class="eyebrow">OpenAI API powered</p>
               <ul>
-                <li>Vision and multimodal item understanding</li>
-                <li>Structured output for retail intent</li>
-                <li>Embeddings for semantic catalogue retrieval</li>
-                <li>Tool-calling style chat actions</li>
-                <li>Natural-language explanations and emails</li>
+                <li>GPT-4o mini vision reads uploaded or selected starter-item images</li>
+                <li>Structured JSON turns styling ambiguity into item attributes, roles, and search intent</li>
+                <li>text-embedding-3-large creates semantic vectors for catalogue search phrases</li>
+                <li>Responses-style tool selection turns chat requests into explain, lookup, or preview actions</li>
+                <li>Generation writes shopper rationale, associate notes, Braze email copy, and final guardrail review</li>
               </ul>
             </div>
             <div>
-              <p class="eyebrow">Application layer</p>
+              <p class="eyebrow">RetailNext owned</p>
               <ul>
-                <li>Catalogue, SKU, image, and inventory truth</li>
-                <li>Budget, price, and fulfilment validation</li>
-                <li>Slot completeness and substitution enforcement</li>
-                <li>Preview/apply basket safety</li>
-                <li>Business signal and eval checks</li>
+                <li>Frontend form, upload, generation trigger, result rendering, and basket state</li>
+                <li>Catalogue, SKU metadata, product images, prices, and store inventory truth</li>
+                <li>Budget, local availability, urgency, role matching, substitution, and fulfilment validation</li>
+                <li>Preview/apply safety so Mira cannot mutate a basket until the app validates the change</li>
+                <li>Business KPIs, missed-demand signal, deployment, and CRM/Braze handoff</li>
               </ul>
             </div>
           </div>

@@ -3357,6 +3357,44 @@ input[type="range"] {
   gap: 8px;
 }
 
+.source-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.source-chip,
+.step-source em {
+  display: inline-flex;
+  width: fit-content;
+  border: 1px solid #111;
+  padding: 5px 8px;
+  font-style: normal;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.source-chip.retailnext,
+.sequence-step.retailnext-owned .step-source em {
+  background: #111;
+  color: #fff;
+}
+
+.source-chip.openai,
+.sequence-step.openai-owned .step-source em {
+  background: #eef8f5;
+  color: #0b6b42;
+}
+
+.source-chip.hybrid,
+.sequence-step.hybrid-owned .step-source em {
+  background: #fffaf0;
+  color: #7a4b00;
+}
+
 .sequence-step {
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr);
@@ -3367,14 +3405,33 @@ input[type="range"] {
   padding: 12px;
 }
 
+.sequence-step.openai-owned {
+  background: #f3fbf8;
+  border-left: 5px solid #10a37f;
+}
+
+.sequence-step.retailnext-owned {
+  background: #fbfbf8;
+  border-left: 5px solid #111;
+}
+
+.sequence-step.hybrid-owned {
+  background: #fffaf0;
+  border-left: 5px solid #c8973f;
+}
+
 .sequence-step span {
   display: grid;
-  grid-row: 1 / span 3;
+  grid-row: 1 / span 4;
   place-items: center;
   width: 32px;
   height: 32px;
   border: 1px solid #111;
   font-weight: 900;
+}
+
+.step-source {
+  grid-column: 2;
 }
 
 .sequence-step h3 {
