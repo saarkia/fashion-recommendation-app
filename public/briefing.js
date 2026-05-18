@@ -2,32 +2,32 @@ const architectureContent = {
   intent: {
     title: "Shopper intent",
     primitive: "Input surface",
-    body: "The customer starts from a starter item or uploaded image, then adds occasion, style preference, store, budget, and urgency. The app captures the full event mission instead of asking the shopper to know exact search terms.",
-    value: "This directly addresses poor reviews from customers who cannot translate an event need into specific in-store products."
+    body: "The customer starts from a starter item or uploaded image, then adds occasion, style preference, store, budget, and urgency.",
+    value: "The app captures the event mission before retrieval starts, so recommendations are based on the actual shopping need."
   },
   understand: {
     title: "OpenAI understanding",
     primitive: "Vision + Structured Outputs",
-    body: "OpenAI interprets the human and visual ambiguity: item type, colours, formality, style direction, constraints, and required outfit slots. The result is machine-readable intent, not loose marketing copy.",
-    value: "RetailNext can pass structured fields into search, ranking, chat actions, associate notes, and eval checks."
+    body: "OpenAI extracts item type, colours, formality, style direction, constraints, and required outfit slots from the customer input.",
+    value: "Those fields are machine-readable, so they can be passed into search, ranking, chat actions, associate notes, and eval checks."
   },
   retrieve: {
     title: "Embedding retrieval",
     primitive: "text-embedding-3-large",
-    body: "The app converts style and event intent into semantic search vectors, then retrieves relevant products from the prepared RetailNext catalogue. Product IDs still come from the catalogue, never from model invention.",
-    value: "This finds updated or adjacent styles even when the shopper does not use exact product taxonomy."
+    body: "The app converts the event and style intent into semantic search vectors, then retrieves matching products from the prepared RetailNext catalogue.",
+    value: "This helps find relevant styles even when the customer does not use exact product or category wording."
   },
   ground: {
     title: "Retail grounding",
     primitive: "Deterministic business logic",
-    body: "Ranking and filtering enforce store stock, available-today urgency, budget, product role, outfit completeness, and substitution rules. The model is not responsible for inventory truth.",
-    value: "This is the line a CTO will care about: AI interprets, the application verifies."
+    body: "Ranking and filtering enforce store stock, available-today urgency, budget, product role, outfit completeness, and substitution rules.",
+    value: "The model interprets the request; the application verifies what can actually be sold and fulfilled."
   },
   activate: {
     title: "Activation",
     primitive: "Responses-style actions + generation",
-    body: "Mira converts chat into safe basket actions, creates associate handoff notes, writes Braze email copy, and exposes demand signals from substitutions and availability gaps.",
-    value: "One digital session becomes store execution, lifecycle follow-up, and merchandising insight."
+    body: "Mira converts chat into safe basket actions, creates associate handoff notes, writes Braze email copy, and highlights availability gaps.",
+    value: "The session can support the customer, the store associate, and merchandising follow-up."
   }
 };
 
@@ -50,7 +50,7 @@ const platformContent = {
   tools: {
     title: "Tool-calling style action schema",
     body: "Mira interprets follow-up chat such as 'make it cheaper' or 'swap the shoes' into structured basket operations that the app can validate.",
-    value: "This turns a chatbot into a controlled retail agent, with preview/apply safety."
+    value: "The app previews and validates each change before the basket is updated."
   },
   generation: {
     title: "Generation",
@@ -60,14 +60,14 @@ const platformContent = {
   evals: {
     title: "Evals",
     body: "The prototype includes scenario checks; production would expand this into evals for budget adherence, availability truth, event fit, substitution quality, and hallucination prevention.",
-    value: "Gives RetailNext a way to harden the system before scaling to more categories, stores, and customer segments."
+    value: "This gives RetailNext a route to test quality before scaling to more categories, stores, and customer segments."
   }
 };
 
 const stakeholderContent = {
   innovation: {
     title: "Head of Innovation lens",
-    body: "This is a customer-experience wedge with operational pull-through. The shopper gets a complete event-ready basket, the associate gets a handoff, and merchandising gets a signal about demand that was almost missed.",
+    body: "The customer gets a complete event-ready basket, the associate gets a handoff, and merchandising gets a signal about demand that was at risk of being missed.",
     bullets: [
       "Differentiates RetailNext from generic product search.",
       "Creates an AI-assisted clienteling experience that is visible to customers.",
@@ -137,6 +137,15 @@ function setActiveSection(id, shouldScroll = true) {
   }
 }
 
+function syncActiveSection() {
+  const marker = window.scrollY + Math.min(window.innerHeight * 0.35, 280);
+  const current = sections
+    .map((section) => ({ id: section.id, top: section.offsetTop }))
+    .filter((section) => section.top <= marker)
+    .at(-1);
+  if (current?.id) setActiveSection(current.id, false);
+}
+
 navButtons.forEach((button) => {
   button.addEventListener("click", () => setActiveSection(button.dataset.target));
 });
@@ -156,14 +165,8 @@ document.querySelectorAll(".stakeholder-button").forEach((button) => {
   button.addEventListener("click", () => renderStakeholder(button.dataset.lens));
 });
 
-const observer = new IntersectionObserver((entries) => {
-  const visible = entries
-    .filter((entry) => entry.isIntersecting)
-    .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-  if (visible?.target?.id) setActiveSection(visible.target.id, false);
-}, { rootMargin: "-20% 0px -55% 0px", threshold: [0.2, 0.45, 0.7] });
-
-sections.forEach((section) => observer.observe(section));
+window.addEventListener("scroll", syncActiveSection, { passive: true });
 renderArchitecture("intent");
 renderPlatform("vision");
 renderStakeholder("innovation");
+syncActiveSection();

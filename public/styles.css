@@ -3029,10 +3029,10 @@ input[type="range"] {
 }
 
 .brief-hero h1 {
-  max-width: 680px;
+  max-width: 760px;
   margin-bottom: 20px;
-  font-size: clamp(3rem, 6.8vw, 5.8rem);
-  line-height: 0.9;
+  font-size: clamp(2.5rem, 4.9vw, 4.4rem);
+  line-height: 0.98;
   text-transform: uppercase;
 }
 
@@ -3085,7 +3085,7 @@ input[type="range"] {
 .brief-section {
   display: grid;
   gap: 24px;
-  min-height: 620px;
+  min-height: 560px;
   padding: clamp(22px, 4vw, 42px);
   scroll-margin-top: 88px;
 }
@@ -3097,8 +3097,8 @@ input[type="range"] {
 .brief-section h2 {
   max-width: 980px;
   margin-bottom: 12px;
-  font-size: clamp(2rem, 4.7vw, 4.6rem);
-  line-height: 0.95;
+  font-size: clamp(1.85rem, 3.2vw, 3.15rem);
+  line-height: 1.05;
   text-transform: uppercase;
 }
 
@@ -3189,9 +3189,81 @@ input[type="range"] {
   text-transform: uppercase;
 }
 
+.generate-sequence {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sequence-step {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: start;
+  border: 1px solid #111;
+  background: #fbfbf8;
+  padding: 12px;
+}
+
+.sequence-step span {
+  display: grid;
+  grid-row: 1 / span 3;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #111;
+  font-weight: 900;
+}
+
+.sequence-step h3 {
+  grid-column: 2;
+  margin: 0;
+  font-size: 0.98rem;
+}
+
+.sequence-step p {
+  grid-column: 2;
+  margin: 0;
+  color: #4a4f58;
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.sequence-step code {
+  display: block;
+  grid-column: 2;
+  overflow-wrap: anywhere;
+  border-top: 1px solid #d7d7d0;
+  padding-top: 8px;
+  color: #0b6b42;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.sequence-output {
+  border: 1px solid #111;
+  background: #eef8f5;
+  padding: 18px;
+}
+
+.sequence-output strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 1rem;
+  text-transform: uppercase;
+}
+
+.sequence-output p {
+  max-width: 980px;
+  margin: 0;
+  color: #394047;
+  line-height: 1.5;
+}
+
 .architecture-demo {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
 }
 
@@ -3204,11 +3276,13 @@ input[type="range"] {
 .flow-node {
   display: grid;
   align-content: space-between;
-  min-height: 210px;
+  min-height: 132px;
   padding: 14px;
   text-align: left;
+  font-size: 0.82rem;
   font-weight: 900;
   text-transform: uppercase;
+  overflow-wrap: anywhere;
 }
 
 .flow-node.active {
@@ -3231,6 +3305,10 @@ input[type="range"] {
   border: 1px solid #111;
   background: #fffaf0;
   padding: 20px;
+}
+
+.architecture-detail {
+  min-height: 190px;
 }
 
 .architecture-detail h3 {
@@ -3451,6 +3529,7 @@ input[type="range"] {
   .brief-grid.three,
   .brief-grid.four,
   .mission-board,
+  .generate-sequence,
   .system-boundary,
   .rollout-timeline,
   .architecture-flow {
@@ -3458,11 +3537,22 @@ input[type="range"] {
   }
 
   .brief-section h2 {
-    font-size: clamp(1.8rem, 10vw, 3rem);
+    font-size: clamp(1.65rem, 8vw, 2.45rem);
   }
 
   .flow-node {
     min-height: 94px;
+  }
+
+  .sequence-step {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sequence-step code {
+    border-left: 0;
+    border-top: 1px solid #d7d7d0;
+    padding-left: 0;
+    padding-top: 10px;
   }
 
   .image-row img {
