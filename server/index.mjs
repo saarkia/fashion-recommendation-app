@@ -2202,7 +2202,9 @@ async function serveStatic(req, res) {
     return;
   }
 
-  const requested = url.pathname === "/" ? "/index.html" : url.pathname;
+  let requested = url.pathname;
+  if (requested === "/") requested = "/index.html";
+  if (requested === "/briefing") requested = "/briefing.html";
   const filePath = join(publicDir, normalize(requested));
   if (!filePath.startsWith(publicDir)) return jsonResponse(res, 403, { error: "Forbidden" });
   try {

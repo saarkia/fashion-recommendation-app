@@ -2891,3 +2891,615 @@ input[type="range"] {
     justify-self: start;
   }
 }
+
+.top-nav .briefing-link {
+  color: #0b6b42;
+}
+
+.briefing-page {
+  min-height: 100vh;
+  background:
+    linear-gradient(90deg, rgba(16, 163, 127, 0.07), transparent 32%),
+    var(--paper);
+}
+
+.brief-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid #111;
+  background: rgba(248, 247, 242, 0.94);
+  padding: 14px 22px;
+  backdrop-filter: blur(10px);
+}
+
+.brief-brand {
+  color: inherit;
+  text-decoration: none;
+}
+
+.brief-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brief-pill,
+.brief-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  border: 1px solid #111;
+  background: #fff;
+  color: #111;
+  padding: 8px 13px;
+  text-decoration: none;
+  font-weight: 850;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.brief-pill:hover,
+.brief-pill:focus-visible,
+.brief-secondary:hover,
+.brief-secondary:focus-visible {
+  background: #111;
+  color: #fff;
+}
+
+.brief-shell {
+  display: grid;
+  grid-template-columns: 245px minmax(0, 1fr);
+  gap: 24px;
+  width: min(1440px, 100%);
+  margin: 0 auto;
+  padding: 26px;
+}
+
+.brief-rail {
+  position: sticky;
+  top: 84px;
+  align-self: start;
+  display: grid;
+  gap: 8px;
+  border: 1px solid #111;
+  background: #fff;
+  padding: 16px;
+}
+
+.brief-nav-button,
+.flow-node,
+.platform-button,
+.stakeholder-button {
+  border: 1px solid #111;
+  background: #fff;
+  color: #111;
+  cursor: pointer;
+  font: inherit;
+}
+
+.brief-nav-button {
+  min-height: 38px;
+  padding: 8px 10px;
+  text-align: left;
+  font-size: 0.78rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.brief-nav-button.active,
+.brief-nav-button:hover,
+.brief-nav-button:focus-visible,
+.platform-button.active,
+.platform-button:hover,
+.platform-button:focus-visible,
+.stakeholder-button.active,
+.stakeholder-button:hover,
+.stakeholder-button:focus-visible {
+  background: #111;
+  color: #fff;
+}
+
+.brief-content {
+  display: grid;
+  gap: 26px;
+  min-width: 0;
+}
+
+.brief-hero,
+.brief-section {
+  border: 1px solid #111;
+  background: #fff;
+}
+
+.brief-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 26px;
+  align-items: stretch;
+  min-height: 520px;
+  padding: clamp(24px, 5vw, 58px);
+}
+
+.brief-hero h1 {
+  max-width: 680px;
+  margin-bottom: 20px;
+  font-size: clamp(3rem, 6.8vw, 5.8rem);
+  line-height: 0.9;
+  text-transform: uppercase;
+}
+
+.brief-hero p {
+  max-width: 760px;
+  color: #353941;
+  font-size: clamp(1.05rem, 2vw, 1.35rem);
+  line-height: 1.45;
+}
+
+.brief-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.brief-start {
+  width: auto;
+  min-width: 210px;
+  border-radius: 0;
+}
+
+.brief-proof-strip {
+  display: grid;
+  gap: 12px;
+  align-self: stretch;
+}
+
+.brief-proof-strip div {
+  display: grid;
+  align-content: end;
+  gap: 8px;
+  min-height: 130px;
+  border: 1px solid #111;
+  background: #f8f7f2;
+  padding: 16px;
+}
+
+.brief-proof-strip strong {
+  font-size: 1.25rem;
+  text-transform: uppercase;
+}
+
+.brief-proof-strip span {
+  color: #565b63;
+  line-height: 1.35;
+}
+
+.brief-section {
+  display: grid;
+  gap: 24px;
+  min-height: 620px;
+  padding: clamp(22px, 4vw, 42px);
+  scroll-margin-top: 88px;
+}
+
+.brief-section-copy {
+  max-width: 980px;
+}
+
+.brief-section h2 {
+  max-width: 980px;
+  margin-bottom: 12px;
+  font-size: clamp(2rem, 4.7vw, 4.6rem);
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+
+.brief-section-copy > p:not(.eyebrow) {
+  max-width: 920px;
+  color: #444951;
+  font-size: 1.08rem;
+  line-height: 1.55;
+}
+
+.brief-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.brief-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.brief-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.brief-grid.four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.brief-card {
+  border: 1px solid #111;
+  background: #fbfbf8;
+  padding: 18px;
+}
+
+.brief-card.emphasis {
+  background: #eef8f5;
+}
+
+.brief-card span,
+.rollout-timeline span {
+  display: block;
+  margin-bottom: 12px;
+  color: #0b6b42;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.brief-card h3 {
+  margin-bottom: 10px;
+  font-size: 1.35rem;
+}
+
+.brief-card p,
+.mission-board span,
+.architecture-detail p,
+.system-boundary li,
+.platform-detail p,
+.stakeholder-panel p,
+.stakeholder-panel li,
+.metric-card p,
+.rollout-timeline p,
+.demo-path-list li,
+.closing-statement p {
+  color: #4a4f58;
+  line-height: 1.46;
+}
+
+.mission-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid #111;
+  background: #111;
+  gap: 1px;
+}
+
+.mission-board div {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 160px;
+  background: #fff;
+  padding: 18px;
+}
+
+.mission-board strong {
+  font-size: 1.1rem;
+  text-transform: uppercase;
+}
+
+.architecture-demo {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr);
+  gap: 16px;
+}
+
+.architecture-flow {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.flow-node {
+  display: grid;
+  align-content: space-between;
+  min-height: 210px;
+  padding: 14px;
+  text-align: left;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.flow-node.active {
+  background: #111;
+  color: #fff;
+}
+
+.flow-node span {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid currentColor;
+}
+
+.architecture-detail,
+.platform-detail,
+.stakeholder-panel,
+.closing-statement {
+  border: 1px solid #111;
+  background: #fffaf0;
+  padding: 20px;
+}
+
+.architecture-detail h3 {
+  font-size: 1.8rem;
+}
+
+.architecture-detail strong,
+.platform-detail strong {
+  display: block;
+  margin-top: 16px;
+  color: #111;
+  font-size: 1.05rem;
+}
+
+.system-boundary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.system-boundary > div {
+  border: 1px solid #111;
+  background: #fbfbf8;
+  padding: 18px;
+}
+
+.system-boundary ul,
+.stakeholder-panel ul {
+  margin: 0;
+  padding-left: 19px;
+}
+
+.platform-interactive {
+  display: grid;
+  grid-template-columns: 270px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.platform-buttons {
+  display: grid;
+  gap: 8px;
+}
+
+.platform-button,
+.stakeholder-button {
+  min-height: 44px;
+  padding: 9px 12px;
+  text-align: left;
+  font-weight: 850;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.platform-detail {
+  display: grid;
+  align-content: center;
+  min-height: 290px;
+}
+
+.image-row img {
+  width: 100%;
+  height: 210px;
+  border: 1px solid #111;
+  background: #f6f6f2;
+  object-fit: contain;
+}
+
+.stakeholder-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.stakeholder-panel {
+  background: #eef8f5;
+}
+
+.stakeholder-panel p {
+  max-width: 900px;
+  font-size: 1.1rem;
+}
+
+.metric-card strong {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 1.2rem;
+}
+
+.rollout-timeline {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.rollout-timeline article {
+  min-height: 250px;
+  border: 1px solid #111;
+  background: #fbfbf8;
+  padding: 18px;
+}
+
+.rollout-timeline h3 {
+  font-size: 1.35rem;
+}
+
+.demo-path-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: demo;
+}
+
+.demo-path-list li {
+  position: relative;
+  border: 1px solid #111;
+  background: #fbfbf8;
+  padding: 14px 14px 14px 56px;
+}
+
+.demo-path-list li::before {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #111;
+  color: #111;
+  font-weight: 900;
+  content: counter(demo);
+  counter-increment: demo;
+}
+
+.closing-statement {
+  background: #111;
+}
+
+.closing-statement .eyebrow,
+.closing-statement p {
+  color: #fff;
+}
+
+@media (max-width: 1120px) {
+  .brief-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .brief-rail {
+    position: static;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .brief-rail .eyebrow {
+    grid-column: 1 / -1;
+  }
+
+  .brief-hero,
+  .architecture-demo,
+  .platform-interactive {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mission-board,
+  .brief-grid.four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .architecture-flow {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .flow-node {
+    min-height: 150px;
+  }
+}
+
+@media (max-width: 760px) {
+  .brief-header {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 12px 14px;
+  }
+
+  .brief-header-actions {
+    width: 100%;
+  }
+
+  .brief-pill {
+    flex: 1;
+  }
+
+  .brief-shell {
+    padding: 14px;
+  }
+
+  .brief-rail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 12px;
+  }
+
+  .brief-nav-button {
+    font-size: 0.68rem;
+  }
+
+  .brief-hero,
+  .brief-section {
+    padding: 18px;
+  }
+
+  .brief-hero {
+    min-height: auto;
+  }
+
+  .brief-grid.two,
+  .brief-grid.three,
+  .brief-grid.four,
+  .mission-board,
+  .system-boundary,
+  .rollout-timeline,
+  .architecture-flow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .brief-section h2 {
+    font-size: clamp(1.8rem, 10vw, 3rem);
+  }
+
+  .flow-node {
+    min-height: 94px;
+  }
+
+  .image-row img {
+    height: 170px;
+  }
+}
+
+@media print {
+  .brief-header,
+  .brief-rail,
+  .brief-hero-actions {
+    display: none;
+  }
+
+  .briefing-page {
+    background: #fff;
+  }
+
+  .brief-shell {
+    display: block;
+    width: 100%;
+    padding: 0;
+  }
+
+  .brief-content {
+    display: block;
+  }
+
+  .brief-hero,
+  .brief-section {
+    min-height: 100vh;
+    page-break-after: always;
+    border: 0;
+    padding: 28px;
+  }
+
+  .brief-section:last-child {
+    page-break-after: auto;
+  }
+}
