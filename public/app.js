@@ -9,6 +9,10 @@ const state = {
   loadingTimer: null,
   requestId: 0,
   isGenerating: false,
+  basket: {
+    items: [],
+    lastAddedOutfitKey: ""
+  },
   chat: {
     history: [],
     chatState: {
@@ -23,6 +27,7 @@ const state = {
     lookupResults: null,
     suggestedPrompts: [],
     pendingEmail: false,
+    pendingBasket: false,
     busyMessage: "",
     isBusy: false
   }
@@ -52,6 +57,9 @@ const els = {
   quickPrompts: document.querySelector("#quickPrompts"),
   chatForm: document.querySelector("#chatForm"),
   chatInput: document.querySelector("#chatInput"),
+  basketChip: document.querySelector("#basketChip"),
+  basketCount: document.querySelector("#basketCount"),
+  basketTotal: document.querySelector("#basketTotal"),
   statusDot: document.querySelector("#statusDot"),
   statusLabel: document.querySelector("#statusLabel"),
   productTemplate: document.querySelector("#productTemplate")
@@ -131,6 +139,12 @@ function isEmailIntent(value) {
   return /\b(email|e-mail|send|share|mail|inbox)\b/i.test(String(value || ""));
 }
 
+function isBasketIntent(value) {
+  const text = String(value || "");
+  return /\b(add|put|place)\b[\s\S]{0,32}\b(basket|bag|cart|outfit|look|items)\b/i.test(text)
+    || /\b(buy|purchase|checkout)\b[\s\S]{0,32}\b(outfit|look|basket|bag|items)\b/i.test(text);
+}
+
 function shopperFacingText(value) {
   return String(value || "")
     .replace(/\bcustomer-facing\b/gi, "shopper-facing")
@@ -148,6 +162,48 @@ function shopperFacingText(value) {
     .replace(/\bthe recommendations focus on\b/g, "I focused on")
     .replace(/\bRecommendations are selected\b/g, "I selected recommendations")
     .replace(/\brecommendations are selected\b/g, "I selected recommendations");
+}
+
+function basketTotal() {
+  return state.basket.items.reduce((sum, item) => sum + Number(item.price || 0), 0);
+}
+
+function basketProductIds() {
+  return new Set(state.basket.items.map((item) => String(item.id)));
+}
+
+function isProductInBasket(product) {
+  return basketProductIds().has(String(product?.id));
+}
+
+function currentOutfitKey(recommendation = state.latest) {
+  return (recommendation?.outfit || [])
+    .map((product) => String(product.id))
+    .join(":");
+}
+
+function outfitBasketStatus(recommendation = state.latest) {
+  const outfit = recommendation?.outfit || [];
+  const ids = basketProductIds();
+  const missing = outfit.filter((product) => !ids.has(String(product.id)));
+  const basketValue = recommendation?.business?.basketValue
+    ?? outfit.reduce((sum, product) => sum + Number(product.price || 0), 0);
+  return {
+    outfit,
+    missing,
+    allAdded: Boolean(outfit.length) && missing.length === 0,
+    basketValue,
+    availableToday: recommendation?.business?.availableToday || 0
+  };
+}
+
+function renderBasketStatus() {
+  const count = state.basket.items.length;
+  const total = basketTotal();
+  els.basketCount.textContent = String(count);
+  els.basketTotal.textContent = `$${total}`;
+  els.basketChip.classList.toggle("has-items", count > 0);
+  els.basketChip.setAttribute("aria-label", `Basket: ${count} item${count === 1 ? "" : "s"}, $${total}`);
 }
 
 function renderInspiration() {
@@ -215,6 +271,13 @@ async function loadImageFile(file) {
 function productCard(product) {
   const node = els.productTemplate.content.firstElementChild.cloneNode(true);
   if (state.changedProductIds.includes(product.id)) node.classList.add("is-updated");
+  if (isProductInBasket(product)) {
+    node.classList.add("is-in-basket");
+    const basketBadge = document.createElement("span");
+    basketBadge.className = "basket-state";
+    basketBadge.textContent = "In basket";
+    node.querySelector(".image-wrap").append(basketBadge);
+  }
   node.querySelector("img").src = product.image;
   node.querySelector("img").alt = product.productDisplayName;
   node.querySelector(".role-badge").textContent = product.role;
@@ -224,6 +287,14 @@ function productCard(product) {
   node.querySelector(".price").textContent = `$${product.price}`;
   node.querySelector(".score").textContent = `${product.score}% fit`;
   return node;
+}
+
+function renderCurrentProductGrid() {
+  if (!state.latest?.outfit?.length) {
+    els.productGrid.innerHTML = `<div class="empty-state">No complete outfit found for this constraint set. Try a wider budget or network availability.</div>`;
+    return;
+  }
+  els.productGrid.replaceChildren(...state.latest.outfit.map(productCard));
 }
 
 function resetChat() {
@@ -241,6 +312,7 @@ function resetChat() {
     lookupResults: null,
     suggestedPrompts: [],
     pendingEmail: false,
+    pendingBasket: false,
     busyMessage: "",
     isBusy: false
   };
@@ -407,6 +479,40 @@ function availabilityLookupMarkup(lookup) {
   `;
 }
 
+function purchasePromptMarkup() {
+  if (!state.latest?.outfit?.length || state.chat.preview) return "";
+  const { outfit, missing, allAdded, basketValue, availableToday } = outfitBasketStatus(state.latest);
+  const countLabel = `${outfit.length} item${outfit.length === 1 ? "" : "s"}`;
+  const store = state.latest.store || "your selected store";
+  const thumbs = outfit.slice(0, 4).map((product) => `
+    <img src="${escapeHtml(product.image || "")}" alt="${escapeHtml(product.productDisplayName || "Outfit item")}" />
+  `).join("");
+
+  if (allAdded) {
+    return `
+      <section class="purchase-card in-basket" aria-label="Mira basket status">
+        <p class="eyebrow">Mira basket</p>
+        <strong>This outfit is in your basket.</strong>
+        <span>${escapeHtml(countLabel)} / $${basketValue} saved, with ${availableToday}/${outfit.length} available today at ${escapeHtml(store)}.</span>
+        <div class="purchase-thumbs">${thumbs}</div>
+      </section>
+    `;
+  }
+
+  const missingCopy = missing.length === outfit.length
+    ? "the full look"
+    : `${missing.length} missing item${missing.length === 1 ? "" : "s"}`;
+  return `
+    <section class="purchase-card" aria-label="Mira purchase prompt">
+      <p class="eyebrow">Mira checkout cue</p>
+      <strong>Do you want to buy this outfit?</strong>
+      <span>I'll add ${escapeHtml(missingCopy)} to your basket: ${escapeHtml(countLabel)}, $${basketValue}, checked against ${escapeHtml(store)} stock.</span>
+      <div class="purchase-thumbs">${thumbs}</div>
+      <button type="button" data-basket-action="add-outfit">Yes, add outfit to basket</button>
+    </section>
+  `;
+}
+
 function renderChat() {
   const hasRecommendation = Boolean(state.latest?.outfit?.length);
   const hasOpenAI = Boolean(state.bootstrap?.hasOpenAI);
@@ -429,8 +535,10 @@ function renderChat() {
   }
 
   if (!hasOpenAI) {
-    els.chatMessages.innerHTML = `<div class="chat-empty">OpenAI-powered chat refinement is unavailable in this environment, but the outfit recommendation still works with local fallback logic.</div>`;
-    return;
+    if (!hasRecommendation) {
+      els.chatMessages.innerHTML = `<div class="chat-empty">OpenAI-powered chat refinement is unavailable in this environment, but the outfit recommendation still works with local fallback logic.</div>`;
+      return;
+    }
   }
 
   const messages = [
@@ -439,7 +547,9 @@ function renderChat() {
     <div class="chat-message ${entry.role === "user" ? "from-user" : "from-agent"}">
       ${escapeHtml(entry.role === "assistant" ? shopperFacingText(entry.content) : entry.content)}
     </div>
-  `)
+  `),
+    purchasePromptMarkup(),
+    !hasOpenAI && hasRecommendation ? `<div class="chat-empty">OpenAI chat refinement is unavailable here, but Mira can still add this outfit to your basket.</div>` : ""
   ].filter(Boolean);
 
   if (state.chat.preview) {
@@ -512,6 +622,7 @@ function renderIdleState() {
     li.textContent = step.title;
     return li;
   }));
+  renderBasketStatus();
   renderChat();
   setGenerateButtonState(false);
 }
@@ -594,6 +705,7 @@ function renderResult(data, options = {}) {
   state.changedProductIds = options.changedProductIds || [];
   state.loadingDone = false;
   state.isGenerating = false;
+  state.chat.pendingBasket = Boolean(data.outfit?.length && !outfitBasketStatus(data).allAdded);
   setGenerateButtonState(false);
   if (options.seedChat) {
     state.chat.history = [{ role: "assistant", content: recommendationChatIntro(data) }];
@@ -634,10 +746,7 @@ function renderResult(data, options = {}) {
     </div>
   `;
 
-  els.productGrid.replaceChildren(...data.outfit.map(productCard));
-  if (!data.outfit.length) {
-    els.productGrid.innerHTML = `<div class="empty-state">No complete outfit found for this constraint set. Try a wider budget or network availability.</div>`;
-  }
+  renderCurrentProductGrid();
 
   els.kpiGrid.replaceChildren(
     ...data.business.kpis.map((kpi) => {
@@ -673,6 +782,7 @@ function renderResult(data, options = {}) {
     })
   );
   renderChat();
+  renderBasketStatus();
 }
 
 async function requestRecommendations() {
@@ -738,6 +848,43 @@ async function sendOutfitEmailFromChat(email) {
   return data;
 }
 
+function addCurrentOutfitToBasket({ recordUserConfirmation = true } = {}) {
+  if (recordUserConfirmation) {
+    state.chat.history.push({ role: "user", content: "Yes, add outfit to basket" });
+  }
+
+  if (!state.latest?.outfit?.length) {
+    state.chat.history.push({ role: "assistant", content: "Generate an outfit first, then I can add the shoppable pieces to your basket." });
+    renderChat();
+    return;
+  }
+
+  const existingIds = basketProductIds();
+  const outfitKey = currentOutfitKey(state.latest);
+  const newItems = state.latest.outfit
+    .filter((product) => !existingIds.has(String(product.id)))
+    .map((product) => ({
+      ...product,
+      store: state.latest.store,
+      inventoryCount: Number(product.inventory?.[state.latest.store] || 0),
+      addedAt: new Date().toISOString(),
+      outfitKey
+    }));
+
+  state.basket.items.push(...newItems);
+  state.basket.lastAddedOutfitKey = outfitKey;
+  state.chat.pendingBasket = false;
+
+  const itemWord = newItems.length === 1 ? "piece" : "pieces";
+  const message = newItems.length
+    ? `Done - I added ${newItems.length} ${itemWord} to your basket. Your basket is now ${state.basket.items.length} item${state.basket.items.length === 1 ? "" : "s"} at $${basketTotal()}.`
+    : "This full outfit is already in your basket. I will keep it there while you refine the look.";
+  state.chat.history.push({ role: "assistant", content: message });
+  renderBasketStatus();
+  renderCurrentProductGrid();
+  renderChat();
+}
+
 async function previewLookupSelection(productId, productName) {
   if (!productId || state.chat.isBusy || !state.latest?.outfit?.length) return;
   state.chat.preview = null;
@@ -777,14 +924,20 @@ async function previewLookupSelection(productId, productName) {
 
 async function sendChatMessage(message) {
   const trimmed = String(message || "").trim();
-  if (!trimmed || state.chat.isBusy || !state.bootstrap?.hasOpenAI) return;
+  if (!trimmed || state.chat.isBusy) return;
   const emailAddress = extractEmailAddress(trimmed);
   const wantsEmail = isEmailIntent(trimmed) || state.chat.pendingEmail;
+  const wantsBasket = isBasketIntent(trimmed) || (state.chat.pendingBasket && /^(yes|yes please|please do|go ahead|add it|add them)$/i.test(trimmed));
+  if (!state.bootstrap?.hasOpenAI && !wantsBasket) return;
   state.chat.preview = null;
   state.chat.previewSwap = null;
   state.chat.previewChangedProductIds = [];
   state.chat.lookupResults = null;
   state.chat.history.push({ role: "user", content: trimmed });
+  if (wantsBasket) {
+    addCurrentOutfitToBasket({ recordUserConfirmation: false });
+    return;
+  }
   if (wantsEmail) {
     state.chat.suggestedPrompts = state.chat.suggestedPrompts.filter((prompt) => !isEmailIntent(prompt));
     state.chat.busyMessage = emailAddress ? "Sending your outfit email now..." : "";
@@ -907,10 +1060,19 @@ els.chatForm.addEventListener("submit", (event) => {
 els.quickPrompts.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!button) return;
+  if (isBasketIntent(button.textContent)) {
+    addCurrentOutfitToBasket();
+    return;
+  }
   sendChatMessage(button.textContent);
 });
 
 els.chatMessages.addEventListener("click", (event) => {
+  const basketAction = event.target.closest("[data-basket-action]")?.dataset.basketAction;
+  if (basketAction === "add-outfit") {
+    addCurrentOutfitToBasket();
+    return;
+  }
   const lookupItem = event.target.closest("[data-lookup-product-id]");
   if (lookupItem) {
     previewLookupSelection(lookupItem.dataset.lookupProductId, lookupItem.dataset.lookupProductName);
@@ -919,6 +1081,10 @@ els.chatMessages.addEventListener("click", (event) => {
   const action = event.target.closest("[data-chat-action]")?.dataset.chatAction;
   if (action === "apply") applyChatPreview();
   if (action === "reject") rejectChatPreview();
+});
+
+els.basketChip.addEventListener("click", () => {
+  els.chatBlock.scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
 els.uploadZone.addEventListener("click", (event) => {

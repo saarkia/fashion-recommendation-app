@@ -1392,6 +1392,10 @@ input[type="range"] {
   transform: translateY(-4px);
 }
 
+.product-card.is-in-basket {
+  box-shadow: inset 0 0 0 3px #111;
+}
+
 .image-wrap {
   min-height: 240px;
   background: #f4f4f1;
@@ -1401,6 +1405,20 @@ input[type="range"] {
   left: 12px;
   top: 12px;
   color: var(--ink);
+}
+
+.basket-state {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  border: 1px solid #111;
+  background: #111;
+  color: #fff;
+  padding: 5px 8px;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .product-copy {
@@ -1868,7 +1886,8 @@ input[type="range"] {
 .audience-tabs a,
 .top-nav a,
 .search-chip,
-.header-icon {
+.header-icon,
+.basket-chip {
   color: var(--ink);
   text-decoration: none;
 }
@@ -1952,6 +1971,54 @@ input[type="range"] {
   width: 30px;
   height: 30px;
   font-size: 1.2rem;
+}
+
+.basket-chip {
+  display: inline-grid;
+  flex: 0 0 auto;
+  grid-template-columns: auto auto auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  border: 1px solid #111;
+  background: #fff;
+  padding: 0 10px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.basket-chip span,
+.basket-chip strong,
+.basket-chip em {
+  color: #111;
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.basket-chip strong {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  min-height: 20px;
+  background: #111;
+  color: #fff;
+}
+
+.basket-chip.has-items {
+  background: #111;
+}
+
+.basket-chip.has-items span,
+.basket-chip.has-items em {
+  color: #fff;
+}
+
+.basket-chip.has-items strong {
+  background: var(--accent);
+  color: #111;
 }
 
 .header-actions .status-pill {
@@ -2341,7 +2408,8 @@ input[type="range"] {
   }
 
   .search-chip span:last-child,
-  .header-actions .status-pill span:last-child {
+  .header-actions .status-pill span:last-child,
+  .basket-chip em {
     display: none;
   }
 
@@ -2349,6 +2417,35 @@ input[type="range"] {
     width: 44px;
     padding: 0;
     justify-content: center;
+  }
+}
+
+@media (max-width: 1320px) {
+  .masthead-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 12px;
+    padding-inline: 18px;
+  }
+
+  .wordmark {
+    font-size: clamp(1.9rem, 3vw, 2.45rem);
+    letter-spacing: 0.12em;
+  }
+
+  .header-actions {
+    gap: 8px;
+  }
+
+  .search-chip {
+    width: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .search-chip span:last-child,
+  .header-actions .status-pill span:last-child,
+  .basket-chip em {
+    display: none;
   }
 }
 
@@ -2389,12 +2486,14 @@ input[type="range"] {
   }
 
   .header-actions {
+    flex-wrap: wrap;
     gap: 12px;
   }
 
   .search-chip {
     width: auto;
-    min-width: 176px;
+    min-width: 0;
+    flex: 1 1 156px;
     justify-content: flex-start;
     padding: 0 14px;
   }
@@ -2593,7 +2692,8 @@ input[type="range"] {
 }
 
 .agent-mission,
-.lookup-card {
+.lookup-card,
+.purchase-card {
   max-width: 100%;
   border: 1px solid #111;
   border-radius: 12px;
@@ -2683,6 +2783,62 @@ input[type="range"] {
   padding-top: 8px;
 }
 
+.purchase-card {
+  display: grid;
+  gap: 10px;
+  border-left: 5px solid #111;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+}
+
+.purchase-card.in-basket {
+  border-left-color: #10a37f;
+}
+
+.purchase-card strong {
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.purchase-card > span {
+  color: #575b60;
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.purchase-thumbs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.purchase-thumbs img {
+  width: 100%;
+  aspect-ratio: 1;
+  border: 1px solid #e3e3dc;
+  background: #f7f7f3;
+  object-fit: contain;
+}
+
+.purchase-card button {
+  min-height: 42px;
+  border: 1px solid #111;
+  border-radius: 999px;
+  background: #111;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.purchase-card button:hover,
+.purchase-card button:focus-visible {
+  background: #fff;
+  color: #111;
+}
+
 .lookup-items {
   display: grid;
   gap: 8px;
@@ -2760,7 +2916,9 @@ input[type="range"] {
 .quick-prompts button:focus-visible,
 .chat-form input:focus-visible,
 .chat-form button:focus-visible,
-.preview-actions button:focus-visible {
+.preview-actions button:focus-visible,
+.purchase-card button:focus-visible,
+.basket-chip:focus-visible {
   outline: 3px solid #10a37f;
   outline-offset: 2px;
 }
@@ -2889,6 +3047,10 @@ input[type="range"] {
   .lookup-item small {
     grid-column: 1 / -1;
     justify-self: start;
+  }
+
+  .purchase-thumbs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
