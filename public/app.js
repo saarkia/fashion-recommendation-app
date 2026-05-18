@@ -69,12 +69,12 @@ const loadingSteps = [
   {
     title: "Understanding your item",
     service: "OpenAI GPT-4o mini vision",
-    detail: "Reads the starter image and event context, then extracts style attributes the app can use."
+    detail: "Reads the starter image with the event context and returns structured styling attributes the app can use."
   },
   {
     title: "Creating grounded search intents",
-    service: "OpenAI structured output",
-    detail: "Turns the image readout into catalog search prompts for complementary outfit roles."
+    service: "OpenAI structured output + RetailNext slot mapping",
+    detail: "Uses the same structured response to create complementary outfit roles and catalog search prompts."
   },
   {
     title: "Searching the catalog",
