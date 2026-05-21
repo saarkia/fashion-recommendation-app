@@ -12,7 +12,8 @@ const imageDir = join(publicDir, "catalog-images");
 const PORT = Number(process.env.PORT || 4173);
 const VECTOR_DIMS = 3072;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+const OPENAI_MODEL_FAST = process.env.OPENAI_MODEL_FAST || process.env.OPENAI_MODEL || "gpt-4o-mini";
+const OPENAI_MODEL_REASONING = process.env.OPENAI_MODEL_REASONING || "gpt-4.1";
 const OPENAI_EMBEDDING_MODEL = process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-large";
 const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || 20000);
 const BRAZE_REST_ENDPOINT = process.env.BRAZE_REST_ENDPOINT;
@@ -207,9 +208,9 @@ async function openaiFetch(path, body) {
   }
 }
 
-async function chatJson(messages, maxTokens = 700) {
+async function chatJson(messages, maxTokens = 700, model = OPENAI_MODEL_FAST) {
   const payload = await openaiFetch("/chat/completions", {
-    model: OPENAI_MODEL,
+    model,
     messages,
     response_format: { type: "json_object" },
     temperature: 0.2,
@@ -218,9 +219,9 @@ async function chatJson(messages, maxTokens = 700) {
   return cleanJson(payload.choices?.[0]?.message?.content || "{}");
 }
 
-async function responseWithTools(input, tools, maxOutputTokens = 900) {
+async function responseWithTools(input, tools, maxOutputTokens = 900, model = OPENAI_MODEL_FAST) {
   const payload = await openaiFetch("/responses", {
-    model: OPENAI_MODEL,
+    model,
     input,
     tools,
     tool_choice: "auto",
@@ -970,6 +971,56 @@ function substitutionsForOutfit({ outfit, reference, event, style, store, urgenc
   }).slice(0, 6);
 }
 
+async function enrichSubstitutionRationales({ substitutions, outfit, reference, event, store, analysis }) {
+  if (!OPENAI_API_KEY || !substitutions.length) {
+    return { substitutions, source: "local" };
+  }
+
+  const output = await chatJson([
+    {
+      role: "system",
+      content: "You are a precise retail stylist. Return only valid JSON."
+    },
+    {
+      role: "user",
+      content: `Write specific substitution rationales for backup outfit items.
+
+Use only the facts below. Do not invent sizes, reservations, delivery promises, or stock beyond the provided counts.
+Each rationale should explain why the substitute protects the outfit if the primary item is unavailable. Mention colour, event fit, formality, or availability where supported.
+
+Event: ${event.label}
+Store: ${store}
+Starter: ${reference.productDisplayName}
+Starter attributes: ${JSON.stringify(analysis)}
+
+Primary outfit:
+${outfit.map((product) => `- id ${product.id}: ${product.productDisplayName}; role ${product.role}; ${product.articleType}; ${product.baseColour}; ${product.usage}; $${product.price}; ${inventoryCount(product, store)} in store`).join("\n")}
+
+Substitutions:
+${substitutions.map((product) => {
+  const primary = outfit.find((item) => item.id === product.forProductId);
+  return `- id ${product.id}: ${product.productDisplayName}; substitute for ${primary?.productDisplayName || product.forProductId}; role ${product.role}; ${product.articleType}; ${product.baseColour}; ${product.usage}; $${product.price}; ${inventoryCount(product, store)} in store`;
+}).join("\n")}
+
+Return JSON:
+{
+  "rationales": {
+    "SUBSTITUTE_PRODUCT_ID": "one concise shopper-safe rationale"
+  }
+}`
+    }
+  ], 850, OPENAI_MODEL_REASONING);
+
+  const rationales = output.rationales || {};
+  return {
+    substitutions: substitutions.map((product) => ({
+      ...product,
+      why: compactText(rationales[String(product.id)] || rationales[product.id], product.why)
+    })),
+    source: "openai"
+  };
+}
+
 async function finalizeRecommendationPreview({ recommendation, outfit, changeSummary, ai }) {
   const event = eventByLabel(recommendation.event);
   const style = styleByLabel(recommendation.style);
@@ -980,7 +1031,15 @@ async function finalizeRecommendationPreview({ recommendation, outfit, changeSum
   const basketValue = outfit.reduce((sum, product) => sum + product.price, 0);
   const availableToday = outfit.filter((product) => (product.inventory[store] || 0) > 0).length;
   const lowStock = outfit.filter((product) => (product.inventory[store] || 0) > 0 && (product.inventory[store] || 0) <= 2);
-  const substitutions = substitutionsForOutfit({ outfit, reference, event, style, store, urgency });
+  let substitutions = substitutionsForOutfit({ outfit, reference, event, style, store, urgency });
+  try {
+    const substitutionResult = await enrichSubstitutionRationales({ substitutions, outfit, reference, event, store, analysis });
+    substitutions = substitutionResult.substitutions;
+    ai.substitutionRationale = substitutionResult.source;
+  } catch (error) {
+    ai.errors.push(`Substitution rationale fallback: ${error.message}`);
+    ai.substitutionRationale = "local";
+  }
   const missed = products
     .filter((product) => sameAudience(product, analysis.gender || reference.gender))
     .filter((product) => event.usages.includes(product.usage) || event.seasons.includes(product.season))
@@ -1207,7 +1266,7 @@ Be honest. If a product is only a decent substitute because the sample catalog i
       content: "You are a precise retail stylist and recommendation quality reviewer. Return only valid JSON."
     },
     { role: "user", content }
-  ], 1100);
+  ], 1100, OPENAI_MODEL_REASONING);
 
   return {
     introLines: Array.isArray(output.introLines) ? output.introLines.slice(0, 2) : fallback.introLines,
@@ -1254,7 +1313,9 @@ async function recommend(payload) {
     queryEmbeddings: "local",
     copyGeneration: "local",
     recommendationReview: "local",
-    model: OPENAI_MODEL,
+    substitutionRationale: "local",
+    model: OPENAI_MODEL_FAST,
+    reasoningModel: OPENAI_MODEL_REASONING,
     embeddingModel: OPENAI_EMBEDDING_MODEL,
     errors: []
   };
@@ -1293,7 +1354,7 @@ async function recommend(payload) {
   }
 
   const outfit = [];
-  const substitutions = [];
+  let substitutions = [];
   let remainingBudget = budgetMax;
 
   for (const [slotIndex, slot] of slots.entries()) {
@@ -1347,6 +1408,13 @@ async function recommend(payload) {
     .filter((product) => event.usages.includes(product.usage) || event.seasons.includes(product.season))
     .filter((product) => (product.inventory[store] || 0) === 0)
     .slice(0, 30);
+  try {
+    const substitutionResult = await enrichSubstitutionRationales({ substitutions, outfit, reference, event, store, analysis });
+    substitutions = substitutionResult.substitutions;
+    ai.substitutionRationale = substitutionResult.source;
+  } catch (error) {
+    ai.errors.push(`Substitution rationale fallback: ${error.message}`);
+  }
   let generatedCopy;
   try {
     generatedCopy = await generateBusinessCopy({
@@ -2018,8 +2086,10 @@ async function runChatAgent(payload) {
     queryEmbeddings: recommendation.ai?.queryEmbeddings || "local",
     copyGeneration: recommendation.ai?.copyGeneration || "local",
     recommendationReview: recommendation.ai?.recommendationReview || "local",
+    substitutionRationale: recommendation.ai?.substitutionRationale || "local",
     chatAgent: "local",
-    model: OPENAI_MODEL,
+    model: OPENAI_MODEL_FAST,
+    reasoningModel: OPENAI_MODEL_REASONING,
     embeddingModel: OPENAI_EMBEDDING_MODEL,
     errors: [...(recommendation.ai?.errors || [])]
   };
@@ -2226,7 +2296,8 @@ export async function handler(req, res) {
         styles: Object.fromEntries(Object.entries(styleProfiles).map(([key, value]) => [key, value.label])),
         stores: ["Chicago Loop", "Dallas NorthPark", "New York Herald Square", "San Francisco Centre"],
         hasOpenAI: Boolean(OPENAI_API_KEY),
-        model: OPENAI_MODEL,
+        model: OPENAI_MODEL_FAST,
+        reasoningModel: OPENAI_MODEL_REASONING,
         embeddingModel: OPENAI_EMBEDDING_MODEL,
         inspiration: pickInspiration()
       });
