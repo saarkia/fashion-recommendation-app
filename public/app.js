@@ -38,6 +38,9 @@ const els = {
   eventType: document.querySelector("#eventType"),
   stylePreference: document.querySelector("#stylePreference"),
   store: document.querySelector("#store"),
+  shirtSize: document.querySelector("#shirtSize"),
+  trouserSize: document.querySelector("#trouserSize"),
+  shoeSize: document.querySelector("#shoeSize"),
   budgetMax: document.querySelector("#budgetMax"),
   budgetReadout: document.querySelector("#budgetReadout"),
   form: document.querySelector("#intentForm"),
@@ -72,7 +75,7 @@ const loadingSteps = [
     detail: "Reads the starter image with the event context and returns structured styling attributes the app can use."
   },
   {
-    title: "Creating grounded search intents",
+    title: "Creating search intents",
     service: "OpenAI structured output + RetailNext slot mapping",
     detail: "Uses the same structured response to create complementary outfit roles and catalog search prompts."
   },
@@ -99,6 +102,38 @@ const loadingSteps = [
 ];
 
 const stylistAgentName = "Mira";
+
+function roleLabel(value) {
+  const label = String(value || "item").replaceAll("-", " ");
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function customerSizingFromForm() {
+  const form = new FormData(els.form);
+  return {
+    shirt: String(form.get("shirtSize") || "").trim(),
+    trouser: String(form.get("trouserSize") || "").trim(),
+    shoe: String(form.get("shoeSize") || "").trim()
+  };
+}
+
+function formatCustomerSizing(sizing = state.latest?.customerSizing) {
+  const sizes = sizing || {};
+  return [
+    sizes.shirt ? `shirt ${sizes.shirt}` : "",
+    sizes.trouser ? `trouser ${sizes.trouser}` : "",
+    sizes.shoe ? `shoe ${sizes.shoe}` : ""
+  ].filter(Boolean).join(" / ");
+}
+
+function sizeForProduct(product, sizing = state.latest?.customerSizing) {
+  if (!product || !sizing) return "";
+  const text = `${product.role || ""} ${product.articleType || ""} ${product.subCategory || ""}`.toLowerCase();
+  if (/(shoe|sandal|heel|flat|flip flop)/.test(text)) return sizing.shoe || "";
+  if (/(trouser|jean|short|skirt|patiala|track pant|bottom|legging)/.test(text)) return sizing.trouser || "";
+  if (/(shirt|tshirt|t-shirt|top|kurta|layer|blouse|sweater|hoodie)/.test(text)) return sizing.shirt || "";
+  return "";
+}
 
 function optionList(select, values) {
   select.replaceChildren(
@@ -136,7 +171,7 @@ function extractEmailAddress(value) {
 }
 
 function isEmailIntent(value) {
-  return /\b(email|e-mail|send|share|mail|inbox)\b/i.test(String(value || ""));
+  return /\b(email|e-mail|send|share|mail|inbox|save)\b/i.test(String(value || ""));
 }
 
 function isBasketIntent(value) {
@@ -161,7 +196,9 @@ function shopperFacingText(value) {
     .replace(/\bThe recommendations focus on\b/g, "I focused on")
     .replace(/\bthe recommendations focus on\b/g, "I focused on")
     .replace(/\bRecommendations are selected\b/g, "I selected recommendations")
-    .replace(/\brecommendations are selected\b/g, "I selected recommendations");
+    .replace(/\brecommendations are selected\b/g, "I selected recommendations")
+    .replace(/\bgrounded in\b/gi, "checked against")
+    .replace(/\bgrounded\b/gi, "practical");
 }
 
 function basketTotal() {
@@ -282,7 +319,13 @@ function productCard(product) {
   node.querySelector("img").alt = product.productDisplayName;
   node.querySelector(".role-badge").textContent = product.role;
   node.querySelector("h3").textContent = product.productDisplayName;
-  node.querySelector(".meta").textContent = `${product.articleType} / ${product.baseColour} / ${product.inventory[state.latest.store] || 0} in store`;
+  const selectedSize = sizeForProduct(product);
+  node.querySelector(".meta").textContent = [
+    product.articleType,
+    product.baseColour,
+    selectedSize ? `Size ${selectedSize}` : "",
+    `${product.inventory[state.latest.store] || 0} in store`
+  ].filter(Boolean).join(" / ");
   node.querySelector(".why").textContent = product.why;
   node.querySelector(".price").textContent = `$${product.price}`;
   node.querySelector(".score").textContent = `${product.score}% fit`;
@@ -394,18 +437,32 @@ function loadingBuildGridMarkup() {
 function recommendationChatIntro(data) {
   const intro = data.analysis?.introLines || [];
   const products = (data.outfit || [])
-    .map((product) => `${product.role}: ${product.productDisplayName}`)
-    .join("; ");
+    .map((product) => {
+      const selectedSize = sizeForProduct(product, data.customerSizing);
+      return `- ${roleLabel(product.role)}: ${product.productDisplayName}${selectedSize ? ` (size ${selectedSize})` : ""}`;
+    })
+    .join("\n");
+  const sizeSummary = formatCustomerSizing(data.customerSizing);
+  const availability = data.business
+    ? `${data.business.availableToday}/${data.outfit.length} pieces are available today at ${data.store}.`
+    : "";
   return [
-    `Hi, I'm ${stylistAgentName}, RetailNEXT's fashion agent powered by OpenAI. I'll keep your recommendation grounded in the catalog, budget, and store availability.`,
+    `Hi, I'm ${stylistAgentName}, RetailNEXT's fashion agent powered by OpenAI.`,
     shopperFacingText(intro[0]) || `I built this around ${data.analysis?.item || "the starter item"} for ${String(data.event || "your event").toLowerCase()}.`,
-    products ? `I found ${data.outfit.length} shoppable pieces: ${products}. Try one of my suggested prompts below, or ask me for a specific change.` : ""
+    [
+      "I checked the catalogue, your budget and the selected store before showing this look.",
+      availability,
+      sizeSummary ? `I'll keep your sizes with the basket: ${sizeSummary}.` : ""
+    ].filter(Boolean).join(" "),
+    products ? `I found ${data.outfit.length} shoppable pieces:\n${products}` : "",
+    "You can add the outfit to your basket, save it for your store visit, or ask me to change anything."
   ].filter(Boolean).join("\n\n");
 }
 
 function promptButtonsMarkup(prompts) {
   return (prompts || [])
     .slice(0, 2)
+    .map((prompt) => String(prompt || "").replace(/\bemail this outfit\b/i, "Save this outfit"))
     .map((prompt) => `<button type="button">${escapeHtml(prompt)}</button>`)
     .join("");
 }
@@ -484,6 +541,7 @@ function purchasePromptMarkup() {
   const { outfit, missing, allAdded, basketValue, availableToday } = outfitBasketStatus(state.latest);
   const countLabel = `${outfit.length} item${outfit.length === 1 ? "" : "s"}`;
   const store = state.latest.store || "your selected store";
+  const sizeSummary = formatCustomerSizing(state.latest.customerSizing);
   const thumbs = outfit.slice(0, 4).map((product) => `
     <img src="${escapeHtml(product.image || "")}" alt="${escapeHtml(product.productDisplayName || "Outfit item")}" />
   `).join("");
@@ -493,7 +551,7 @@ function purchasePromptMarkup() {
       <section class="purchase-card in-basket" aria-label="Mira basket status">
         <p class="eyebrow">Mira basket</p>
         <strong>This outfit is in your basket.</strong>
-        <span>${escapeHtml(countLabel)} / $${basketValue} saved, with ${availableToday}/${outfit.length} available today at ${escapeHtml(store)}.</span>
+        <span>${escapeHtml(countLabel)} / $${basketValue} saved, with ${availableToday}/${outfit.length} available today at ${escapeHtml(store)}.${sizeSummary ? ` Sizes: ${escapeHtml(sizeSummary)}.` : ""}</span>
         <div class="purchase-thumbs">${thumbs}</div>
       </section>
     `;
@@ -504,9 +562,9 @@ function purchasePromptMarkup() {
     : `${missing.length} missing item${missing.length === 1 ? "" : "s"}`;
   return `
     <section class="purchase-card" aria-label="Mira purchase prompt">
-      <p class="eyebrow">Mira checkout cue</p>
+      <p class="eyebrow">Basket</p>
       <strong>Do you want to buy this outfit?</strong>
-      <span>I'll add ${escapeHtml(missingCopy)} to your basket: ${escapeHtml(countLabel)}, $${basketValue}, checked against ${escapeHtml(store)} stock.</span>
+      <span>I'll add ${escapeHtml(missingCopy)} to your basket: ${escapeHtml(countLabel)}, $${basketValue}, checked against ${escapeHtml(store)} stock.${sizeSummary ? ` I'll save ${escapeHtml(sizeSummary)} with it.` : ""}</span>
       <div class="purchase-thumbs">${thumbs}</div>
       <button type="button" data-basket-action="add-outfit">Yes, add outfit to basket</button>
     </section>
@@ -542,7 +600,6 @@ function renderChat() {
   }
 
   const messages = [
-    agentMissionMarkup(state.latest?.agent),
     ...state.chat.history.map((entry) => `
     <div class="chat-message ${entry.role === "user" ? "from-user" : "from-agent"}">
       ${escapeHtml(entry.role === "assistant" ? shopperFacingText(entry.content) : entry.content)}
@@ -662,6 +719,12 @@ function scrollToProgress() {
   }, 80);
 }
 
+function scrollToResults() {
+  window.setTimeout(() => {
+    els.productGrid?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 120);
+}
+
 function startLoadingProcess() {
   clearLoadingTimer();
   state.latest = null;
@@ -736,6 +799,7 @@ function renderResult(data, options = {}) {
       <p class="eyebrow">AI stylist readout</p>
       <p><strong>${escapeHtml(introLines[0])}</strong> ${escapeHtml(introLines[1])}</p>
       ${outfitRationale ? `<p class="ai-review">${escapeHtml(outfitRationale)}</p>` : ""}
+      ${data.customerSizing ? `<p class="size-summary"><strong>Saved sizes:</strong> ${escapeHtml(formatCustomerSizing(data.customerSizing))}</p>` : ""}
       <p class="ai-detail">${escapeHtml(aiSummary)}</p>
     </div>
     <div class="analysis-tags">
@@ -801,6 +865,7 @@ async function requestRecommendations() {
         eventType: form.get("eventType"),
         stylePreference: form.get("stylePreference"),
         store: form.get("store"),
+        customerSizing: customerSizingFromForm(),
         budgetMax: form.get("budgetMax"),
         urgency: form.get("urgency")
       })
@@ -809,7 +874,10 @@ async function requestRecommendations() {
     if (!response.ok) throw new Error(data.error || "Recommendation request failed");
     if (requestId !== state.requestId) return;
     await finishLoadingProcess();
-    if (requestId === state.requestId) renderResult(data, { seedChat: true });
+    if (requestId === state.requestId) {
+      renderResult(data, { seedChat: true });
+      scrollToResults();
+    }
   } catch (error) {
     if (requestId !== state.requestId) return;
     clearLoadingTimer();
@@ -830,7 +898,8 @@ function currentConstraints() {
     stylePreference: form.get("stylePreference"),
     storeId: form.get("store"),
     budgetMax: Number(form.get("budgetMax")),
-    urgency: form.get("urgency")
+    urgency: form.get("urgency"),
+    customerSizing: customerSizingFromForm()
   };
 }
 
@@ -866,6 +935,7 @@ function addCurrentOutfitToBasket({ recordUserConfirmation = true } = {}) {
     .map((product) => ({
       ...product,
       store: state.latest.store,
+      selectedSize: sizeForProduct(product, state.latest.customerSizing),
       inventoryCount: Number(product.inventory?.[state.latest.store] || 0),
       addedAt: new Date().toISOString(),
       outfitKey
@@ -876,8 +946,9 @@ function addCurrentOutfitToBasket({ recordUserConfirmation = true } = {}) {
   state.chat.pendingBasket = false;
 
   const itemWord = newItems.length === 1 ? "piece" : "pieces";
+  const sizeSummary = formatCustomerSizing(state.latest.customerSizing);
   const message = newItems.length
-    ? `Done - I added ${newItems.length} ${itemWord} to your basket. Your basket is now ${state.basket.items.length} item${state.basket.items.length === 1 ? "" : "s"} at $${basketTotal()}.`
+    ? `Done - I added ${newItems.length} ${itemWord} to your basket. Your basket is now ${state.basket.items.length} item${state.basket.items.length === 1 ? "" : "s"} at $${basketTotal()}.${sizeSummary ? ` I saved your sizes too: ${sizeSummary}.` : ""}`
     : "This full outfit is already in your basket. I will keep it there while you refine the look.";
   state.chat.history.push({ role: "assistant", content: message });
   renderBasketStatus();
@@ -940,7 +1011,7 @@ async function sendChatMessage(message) {
   }
   if (wantsEmail) {
     state.chat.suggestedPrompts = state.chat.suggestedPrompts.filter((prompt) => !isEmailIntent(prompt));
-    state.chat.busyMessage = emailAddress ? "Sending your outfit email now..." : "";
+    state.chat.busyMessage = emailAddress ? "Saving your outfit now..." : "";
   } else {
     state.chat.busyMessage = "";
   }
@@ -949,7 +1020,7 @@ async function sendChatMessage(message) {
     state.chat.history.push({
       role: "assistant",
       content: wantsEmail
-        ? "Generate an outfit first, then I can email the full look with the stylist rationale."
+        ? "Generate an outfit first, then I can save the full look by emailing it to you."
         : "Generate an outfit first, then I can explain it or help refine alternatives."
     });
     renderChat();
@@ -963,14 +1034,14 @@ async function sendChatMessage(message) {
     if (wantsEmail) {
       if (!emailAddress) {
         state.chat.pendingEmail = true;
-        state.chat.history.push({ role: "assistant", content: "Of course. What email address should I send this outfit to?" });
+        state.chat.history.push({ role: "assistant", content: "Of course. What email address should I send the saved outfit to?" });
         return;
       }
       await sendOutfitEmailFromChat(emailAddress);
       state.chat.pendingEmail = false;
       state.chat.history.push({
         role: "assistant",
-        content: `Done — I sent this outfit to ${emailAddress}. The email includes Mira's styling rationale, item-by-item pairing notes, and the availability context.`
+        content: `Done - I saved this outfit by emailing it to ${emailAddress}. It includes Mira's styling notes, item-by-item pairing notes, and the store availability context.`
       });
       return;
     }

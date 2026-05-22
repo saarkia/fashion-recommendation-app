@@ -383,6 +383,26 @@ legend {
   font-weight: 650;
 }
 
+.size-fieldset {
+  gap: 9px;
+}
+
+.size-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.size-grid label {
+  gap: 5px;
+  min-width: 0;
+}
+
+.size-grid select {
+  min-height: 38px;
+  padding: 0 9px;
+}
+
 .results-band {
   grid-template-columns: 1fr;
 }
@@ -410,6 +430,12 @@ legend {
   margin-top: 8px;
   color: #3f464d;
   font-size: 0.88rem;
+}
+
+.size-summary {
+  margin-top: 8px;
+  color: #3f464d;
+  font-size: 0.82rem;
 }
 
 .analysis-tags {
@@ -805,6 +831,10 @@ ol {
   padding: 10px 11px;
   font-size: 0.84rem;
   line-height: 1.4;
+}
+
+.chat-message {
+  white-space: pre-line;
 }
 
 .chat-empty {
@@ -1797,6 +1827,10 @@ input[type="range"] {
 
   .analysis-tags {
     justify-content: flex-start;
+  }
+
+  .size-grid {
+    grid-template-columns: 1fr;
   }
 
   .product-grid {
@@ -3087,6 +3121,7 @@ input[type="range"] {
 .brief-header-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -3720,6 +3755,7 @@ input[type="range"] {
 
   .brief-pill {
     flex: 1;
+    min-width: min(100%, 132px);
   }
 
   .brief-shell {

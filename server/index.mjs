@@ -436,6 +436,14 @@ function productGroup(articleType = "", subCategory = "") {
   return "other";
 }
 
+function sizeForProduct(product, customerSizing = {}) {
+  const group = productGroup(product?.articleType, product?.subCategory);
+  if (group === "shoe") return customerSizing.shoe || "";
+  if (group === "bottom") return customerSizing.trouser || "";
+  if (group === "top") return customerSizing.shirt || "";
+  return "";
+}
+
 function starterGroup(analysis) {
   const text = `${analysis.item_type || ""} ${analysis.category || ""}`.toLowerCase();
   if (/(shoe|sandal|heel|flat|sneaker|boot|flip)/.test(text)) return "shoe";
@@ -928,7 +936,7 @@ async function previewSelectedLookupProduct({ recommendation, productId }) {
   });
 
   return {
-    assistantMessage: `I can preview ${selectedProduct.productDisplayName} in this outfit. It has ${inventoryCount(selectedProduct, store)} available at ${store}, so the swap stays grounded in local stock.`,
+    assistantMessage: `I can preview ${selectedProduct.productDisplayName} in this outfit. It has ${inventoryCount(selectedProduct, store)} available at ${store}, so the swap stays checked against local stock.`,
     action: "preview_update",
     chatState: {},
     previewRecommendation,
@@ -1028,6 +1036,7 @@ async function finalizeRecommendationPreview({ recommendation, outfit, changeSum
   const urgency = recommendation.urgency;
   const reference = recommendation.reference;
   const analysis = analysisForRecommendation(recommendation);
+  const customerSizing = normalizeCustomerSizing(recommendation.customerSizing);
   const basketValue = outfit.reduce((sum, product) => sum + product.price, 0);
   const availableToday = outfit.filter((product) => (product.inventory[store] || 0) > 0).length;
   const lowStock = outfit.filter((product) => (product.inventory[store] || 0) > 0 && (product.inventory[store] || 0) <= 2);
@@ -1045,7 +1054,7 @@ async function finalizeRecommendationPreview({ recommendation, outfit, changeSum
     .filter((product) => event.usages.includes(product.usage) || event.seasons.includes(product.season))
     .filter((product) => (product.inventory[store] || 0) === 0)
     .slice(0, 30);
-  let generatedCopy = fallbackBusinessCopy({ reference, event, store, urgency, outfit, missedCount: missed.length, analysis });
+  let generatedCopy = fallbackBusinessCopy({ reference, event, store, urgency, outfit, missedCount: missed.length, analysis, customerSizing });
 
   try {
     generatedCopy = await generateBusinessCopy({
@@ -1059,7 +1068,8 @@ async function finalizeRecommendationPreview({ recommendation, outfit, changeSum
       basketValue,
       availableToday,
       missedCount: missed.length,
-      analysis
+      analysis,
+      customerSizing
     });
     ai.copyGeneration = generatedCopy.source;
   } catch (error) {
@@ -1076,6 +1086,7 @@ async function finalizeRecommendationPreview({ recommendation, outfit, changeSum
       outfit,
       basketValue,
       analysis,
+      customerSizing,
       existingCopy: generatedCopy
     });
     generatedCopy = { ...generatedCopy, ...review, itemReasons: review.itemReasons || generatedCopy.itemReasons };
@@ -1102,6 +1113,7 @@ async function finalizeRecommendationPreview({ recommendation, outfit, changeSum
     },
     outfit,
     substitutions,
+    customerSizing,
     business: {
       basketValue,
       availableToday,
@@ -1132,22 +1144,52 @@ function pickInspiration() {
     .slice(0, 18);
 }
 
-function fallbackBusinessCopy({ reference, event, store, urgency, outfit, missedCount, analysis }) {
+function normalizeCustomerSizing(input = {}) {
+  const source = input.customerSizing || input.sizing || input || {};
+  return {
+    shirt: compactText(source.shirt || source.shirtSize, "M").slice(0, 18),
+    trouser: compactText(source.trouser || source.trouserSize, "32W").slice(0, 18),
+    shoe: compactText(source.shoe || source.shoeSize, "US 9").slice(0, 18)
+  };
+}
+
+function customerSizingSummary(customerSizing = {}) {
+  return [
+    customerSizing.shirt ? `shirt ${customerSizing.shirt}` : "",
+    customerSizing.trouser ? `trouser ${customerSizing.trouser}` : "",
+    customerSizing.shoe ? `shoe ${customerSizing.shoe}` : ""
+  ].filter(Boolean).join(" / ");
+}
+
+function starterDescription(reference, analysis = {}) {
+  const type = compactText(analysis.item_type || reference.articleType || "item")
+    .replace(/\bTshirts\b/i, "T-shirt")
+    .replace(/\bShirts\b/i, "shirt")
+    .replace(/\bTops\b/i, "top")
+    .replace(/\bTrousers\b/i, "trousers")
+    .replace(/\bShoes\b/i, "shoes")
+    .toLowerCase();
+  const colour = compactText(analysis.color || reference.baseColour || "").toLowerCase();
+  return [colour, type].filter(Boolean).join(" ");
+}
+
+function fallbackBusinessCopy({ reference, event, store, urgency, outfit, missedCount, analysis, customerSizing }) {
   const availableToday = outfit.filter((product) => (product.inventory[store] || 0) > 0).length;
-  const starter = `${analysis?.color || reference.baseColour} ${analysis?.item_type || reference.articleType}`.toLowerCase();
+  const starter = starterDescription(reference, analysis);
+  const sizeSummary = customerSizingSummary(customerSizing);
   return {
     introLines: [
-      `I see a ${starter} that can work as the anchor piece for ${event.label.toLowerCase()}.`,
-      `I avoided recommending another near-identical item and focused on pieces that complete the outfit.`
+      `I can use this ${starter || "starter item"} as the anchor piece for your ${event.label.toLowerCase()}.`,
+      "I chose pieces that complete it, rather than adding another near-identical item."
     ],
     demandInsight: `${event.insight} In this mock store view, ${missedCount} event-relevant items have no local stock.`,
-    associatePrompt: `Hi! I found a ${event.label.toLowerCase()} outfit around your ${reference.baseColour.toLowerCase()} ${reference.articleType.toLowerCase()}. ${availableToday}/${outfit.length} recommended items are available today at ${store}, and I added substitutes in case a size is gone before you arrive.`,
+    associatePrompt: `Hi! I found a ${event.label.toLowerCase()} outfit around your ${reference.baseColour.toLowerCase()} ${reference.articleType.toLowerCase()}. ${availableToday}/${outfit.length} recommended items are available today at ${store}.${sizeSummary ? ` Your saved sizes are ${sizeSummary}.` : ""} I added substitutes in case an item sells through before you arrive.`,
     itemReasons: Object.fromEntries(outfit.map((product) => [product.id, product.why]))
   };
 }
 
-async function generateBusinessCopy({ reference, event, style, store, urgency, outfit, substitutions, basketValue, availableToday, missedCount, analysis }) {
-  const fallback = fallbackBusinessCopy({ reference, event, store, urgency, outfit, missedCount, analysis });
+async function generateBusinessCopy({ reference, event, style, store, urgency, outfit, substitutions, basketValue, availableToday, missedCount, analysis, customerSizing }) {
+  const fallback = fallbackBusinessCopy({ reference, event, store, urgency, outfit, missedCount, analysis, customerSizing });
 
   if (!OPENAI_API_KEY || outfit.length === 0) return { ...fallback, source: "local" };
 
@@ -1169,10 +1211,11 @@ Store: ${store}
 Urgency: ${urgency}
 Basket value: $${basketValue}
 Available today: ${availableToday}/${outfit.length}
+Customer sizes: ${customerSizingSummary(customerSizing) || "not provided"}
 Mock missed-demand count: ${missedCount}
 
 Outfit items:
-${outfit.map((product) => `- id ${product.id}: ${product.productDisplayName}; ${product.articleType}; ${product.baseColour}; $${product.price}; ${product.inventory[store] || 0} in store`).join("\n")}
+${outfit.map((product) => `- id ${product.id}: ${product.productDisplayName}; ${product.articleType}; ${product.baseColour}; selected size ${sizeForProduct(product, customerSizing) || "not applicable"}; $${product.price}; ${product.inventory[store] || 0} in store`).join("\n")}
 
 Substitutions:
 ${substitutions.slice(0, 4).map((product) => `- for id ${product.forProductId}: ${product.productDisplayName}; ${product.inventory[store] || 0} in store`).join("\n") || "- none"}
@@ -1185,7 +1228,9 @@ Return JSON:
   "itemReasons": {
     "PRODUCT_ID": "one concise reason this item works"
   }
-}`
+}
+
+Important: product inventory is item-level only. Mention saved sizes as shopper preferences, but do not claim size-level stock has been checked.`
     }
   ], 900);
 
@@ -1198,7 +1243,7 @@ Return JSON:
   };
 }
 
-async function reviewOutfitWithOpenAI({ reference, event, style, store, urgency, outfit, basketValue, analysis, existingCopy }) {
+async function reviewOutfitWithOpenAI({ reference, event, style, store, urgency, outfit, basketValue, analysis, customerSizing, existingCopy }) {
   const fallback = {
     introLines: existingCopy.introLines,
     outfitRationale: "The outfit was built by treating the uploaded item as the anchor, then adding complementary pieces that fit the occasion, budget, and local availability.",
@@ -1230,11 +1275,12 @@ Context:
 - Store: ${store}
 - Urgency: ${urgency}
 - Basket value: $${basketValue}
+- Customer sizes: ${customerSizingSummary(customerSizing) || "not provided"} (preference only; no size-level stock data is available)
 - Starter analysis: ${analysis.color} ${analysis.item_type}; category ${analysis.category}; usage ${analysis.usage}; season ${analysis.season}
 
 Images:
 - Image 1 is the uploaded/starter item.
-${outfit.map((product, index) => `- Image ${index + 2} is product id ${product.id}: ${product.productDisplayName}; role ${product.role}; ${product.articleType}; ${product.baseColour}; $${product.price}; ${product.inventory[store] || 0} in store; retrieval query "${product.retrievalQuery}"`).join("\n")}
+${outfit.map((product, index) => `- Image ${index + 2} is product id ${product.id}: ${product.productDisplayName}; role ${product.role}; ${product.articleType}; ${product.baseColour}; selected size ${sizeForProduct(product, customerSizing) || "not applicable"}; $${product.price}; ${product.inventory[store] || 0} in store; retrieval query "${product.retrievalQuery}"`).join("\n")}
 
 Return JSON:
 {
@@ -1246,8 +1292,8 @@ Return JSON:
   "itemReasons": {
     "PRODUCT_ID": "specific reason this selected product complements the uploaded item and event; do not use generic phrases"
   },
-  "associatePrompt": "short associate/clienteling message grounded in the selected products",
-  "demandInsight": "one sentence executive insight grounded in this search"
+  "associatePrompt": "short associate/clienteling message based on the selected products",
+  "demandInsight": "one sentence executive insight based on this search"
 }
 
 Be honest. If a product is only a decent substitute because the sample catalog is limited, say so in polished retail language. Do not claim products are ideal if they are merely the best available match. Do not approve a rationale that is generic or inconsistent with the product images/metadata.`
@@ -1287,6 +1333,7 @@ async function recommend(payload) {
   const store = payload.store || "Chicago Loop";
   const urgency = payload.urgency || "today";
   const budgetMax = Number(payload.budgetMax || 325);
+  const customerSizing = normalizeCustomerSizing(payload);
   const imageDataUrl = typeof payload.imageDataUrl === "string" && payload.imageDataUrl.startsWith("data:image/") ? payload.imageDataUrl : null;
   let reference = imageDataUrl
     ? {
@@ -1428,20 +1475,22 @@ async function recommend(payload) {
       basketValue,
       availableToday,
       missedCount: missed.length,
-      analysis
+      analysis,
+      customerSizing
     });
     ai.copyGeneration = generatedCopy.source;
   } catch (error) {
     ai.errors.push(`Copy generation fallback: ${error.message}`);
     generatedCopy = {
       ...fallbackBusinessCopy({
-      reference,
-      event,
-      store,
-      urgency,
-      outfit,
-      missedCount: missed.length,
-      analysis
+        reference,
+        event,
+        store,
+        urgency,
+        outfit,
+        missedCount: missed.length,
+        analysis,
+        customerSizing
       }),
       source: "local"
     };
@@ -1457,6 +1506,7 @@ async function recommend(payload) {
       outfit,
       basketValue,
       analysis,
+      customerSizing,
       existingCopy: generatedCopy
     });
     generatedCopy = {
@@ -1496,6 +1546,7 @@ async function recommend(payload) {
     style: style.label,
     store,
     urgency,
+    customerSizing,
     outfit,
     substitutions,
     business: {
@@ -1517,7 +1568,7 @@ async function recommend(payload) {
       ai.queryEmbeddings === "openai" ? "OpenAI embeds the generated event-search intents for semantic catalog retrieval." : "Local fallback uses catalog exemplar embeddings for semantic retrieval.",
       "RAG grounds recommendations in catalog items.",
       "Metadata ranking adds store inventory, budget, season, and urgency.",
-      ai.copyGeneration === "openai" ? "OpenAI generates associate copy and executive demand insight from the grounded basket." : "Local fallback creates associate copy and demand insight from templates.",
+      ai.copyGeneration === "openai" ? "OpenAI generates associate copy and executive demand insight from the catalogue-backed basket." : "Local fallback creates associate copy and demand insight from templates.",
       ai.recommendationReview === "openai" ? "OpenAI performs the final guardrail review: does the outfit work, and does the explanation match the actual products?" : "Local fallback uses rule-based recommendation rationales."
     ]
   };
@@ -1530,7 +1581,7 @@ const chatTools = [
   {
     type: "function",
     name: "explain_basket",
-    description: "Explain the current grounded basket without changing product recommendations.",
+    description: "Explain the current catalogue-backed basket without changing product recommendations.",
     parameters: {
       type: "object",
       properties: {
@@ -1557,7 +1608,7 @@ const chatTools = [
   {
     type: "function",
     name: "find_alternatives",
-    description: "Search the catalog for grounded alternatives that preserve event, inventory, budget, and starter-item context.",
+    description: "Search the catalog for alternatives that preserve event, inventory, budget, and starter-item context.",
     parameters: {
       type: "object",
       properties: {
@@ -1590,7 +1641,8 @@ function currentConstraintsFromRecommendation(recommendation, payload) {
     stylePreference: payload.constraints?.stylePreference || recommendation.style,
     storeId: payload.constraints?.storeId || recommendation.store,
     budgetMax: payload.constraints?.budgetMax || recommendation.business?.basketValue,
-    urgency: payload.constraints?.urgency || recommendation.urgency
+    urgency: payload.constraints?.urgency || recommendation.urgency,
+    customerSizing: normalizeCustomerSizing(payload.constraints?.customerSizing || recommendation.customerSizing)
   };
 }
 
@@ -1600,12 +1652,15 @@ function summarizeForAgent(recommendation, chatState, message, constraints) {
 Current constraints:
 ${JSON.stringify(constraints)}
 
+Saved shopper sizes:
+${customerSizingSummary(recommendation.customerSizing) || "not provided"}
+
 Current starter:
 - ${recommendation.reference?.productDisplayName}
 - ${JSON.stringify(recommendation.analysis?.structuredAttributes || {})}
 
 Current basket:
-${(recommendation.outfit || []).map((product) => `- id ${product.id}: ${product.productDisplayName}; role ${product.role}; ${product.articleType}; ${product.baseColour}; ${product.usage}; $${product.price}; ${product.inventory?.[recommendation.store] || 0} in ${recommendation.store}; reason: ${product.why}`).join("\n")}
+${(recommendation.outfit || []).map((product) => `- id ${product.id}: ${product.productDisplayName}; role ${product.role}; ${product.articleType}; ${product.baseColour}; selected size ${sizeForProduct(product, recommendation.customerSizing) || "not applicable"}; ${product.usage}; $${product.price}; ${product.inventory?.[recommendation.store] || 0} in ${recommendation.store}; reason: ${product.why}`).join("\n")}
 
 Remembered chat preferences:
 ${JSON.stringify(chatState)}
@@ -1629,19 +1684,24 @@ function productPreview(product) {
 function fallbackFollowUpPrompts(recommendation) {
   const agentPrompts = (recommendation?.agent?.nextSteps || [])
     .map((step) => compactText(step.prompt))
+    .map((prompt) => prompt.replace(/\bemail this outfit\b/i, "Save this outfit"))
     .filter(Boolean);
-  if (agentPrompts.length >= 2) return [...new Set(agentPrompts)].slice(0, 2);
+  if (agentPrompts.length >= 2) {
+    const prompts = [...new Set(agentPrompts)].slice(0, 2);
+    if (!prompts.some(isEmailRequestText)) prompts[1] = "Save this outfit";
+    return prompts;
+  }
   const outfit = recommendation?.outfit || [];
   const hasShoes = outfit.some((product) => productGroup(product.articleType, product.subCategory) === "shoe");
   const prompts = [
     hasShoes ? "Can we change the shoes?" : "Can we swap one item?",
-    "Email this outfit"
+    "Save this outfit"
   ];
   return [...new Set(prompts)].slice(0, 2);
 }
 
 function isEmailRequestText(text) {
-  return /\b(email|e-mail|send|share|inbox|mail)\b/i.test(String(text || ""));
+  return /\b(email|e-mail|send|share|inbox|mail|save)\b/i.test(String(text || ""));
 }
 
 async function suggestFollowUpPrompts({ recommendation, lastMessage = "" }) {
@@ -1663,7 +1723,7 @@ Rules:
 - Keep each prompt under 8 words.
 - Do not repeat the last shopper message.
 - Make prompts specific to this basket when useful.
-- Include "Email this outfit" as one option unless the last shopper message already involved email/share/send.
+- Include "Save this outfit" as one option unless the last shopper message already involved email/share/send/save.
 - Good examples: "Can we change the shoes?", "Can you make it cheaper?", "Any brighter options?"
 
 Last shopper message: ${lastMessage || "(none)"}
@@ -1684,9 +1744,9 @@ Return JSON:
     const prompts = Array.isArray(output.prompts)
       ? output.prompts.map((prompt) => String(prompt).trim()).filter(Boolean)
       : [];
-    const deduped = [...new Set(prompts)].slice(0, 2);
+    const deduped = [...new Set(prompts.map((prompt) => prompt.replace(/\bemail this outfit\b/i, "Save this outfit")))].slice(0, 2);
     if (!isEmailRequestText(lastMessage) && !deduped.some(isEmailRequestText)) {
-      deduped[1] = "Email this outfit";
+      deduped[1] = "Save this outfit";
     }
     return deduped.length >= 2 ? deduped.slice(0, 2) : fallback;
   } catch {
@@ -1757,7 +1817,7 @@ function fallbackAgentMission(recommendation) {
         },
     {
       label: "Send the look",
-      prompt: "Email this outfit",
+      prompt: "Save this outfit",
       rationale: "Give the shopper a saved outfit with item-by-item rationale and store context."
     }
   ];
@@ -1857,13 +1917,14 @@ function fallbackOutfitEmailCopy({ firstName, recommendation }) {
   const eventName = recommendation.event || "your event";
   const store = recommendation.store || "your selected store";
   const availableToday = recommendation.business?.availableToday || 0;
+  const sizeSummary = customerSizingSummary(recommendation.customerSizing);
   const itemNames = outfit.map((product) => product.productDisplayName).join(", ");
   return {
     email_subject: `Your ${eventName.toLowerCase()} edit is ready`.slice(0, 58),
-    preheader: `A grounded outfit built around ${starterName}, with availability checked.`.slice(0, 110),
+    preheader: `An outfit built around ${starterName}, with availability checked.`.slice(0, 110),
     hero_headline: `Your ${eventName.toLowerCase()} look is ready.`,
     hero_intro: `I built this look around ${starterName}, then checked ${store} availability so the basket stays practical as well as styled.`,
-    outfit_story: `The starter item anchors the palette and level of polish, while ${itemNames || "the recommended pieces"} complete the look for ${eventName.toLowerCase()}. ${availableToday}/${outfit.length} recommended pieces are available today, so the styling stays grounded in current inventory.`,
+    outfit_story: `The starter item anchors the palette and level of polish, while ${itemNames || "the recommended pieces"} complete the look for ${eventName.toLowerCase()}. ${availableToday}/${outfit.length} recommended pieces are available today.${sizeSummary ? ` Your saved sizes are ${sizeSummary}.` : ""}`,
     starter_note: `${starterName} sets the direction for the outfit, so the other pieces were chosen to complement it rather than compete with it.`,
     associate_note: recommendation.business?.associatePrompt || `Lead with the starter item, then show the locally available pieces that complete the basket.`,
     cta_label: "View and refine this look",
@@ -1903,11 +1964,12 @@ Store: ${store}
 Urgency: ${urgencyLabel(recommendation.urgency)}
 Basket value: $${recommendation.business?.basketValue || 0}
 Available today: ${recommendation.business?.availableToday || 0}/${recommendation.outfit.length}
+Customer sizes: ${customerSizingSummary(recommendation.customerSizing) || "not provided"}
 Starter item: ${recommendation.reference?.productDisplayName || recommendation.analysis?.item}
 Starter attributes: ${JSON.stringify(recommendation.analysis?.structuredAttributes || {})}
 
 Outfit items:
-${recommendation.outfit.map((product) => `- id ${product.id}: ${product.productDisplayName}; role ${product.role}; ${product.articleType}; ${product.baseColour}; season ${product.season}; usage ${product.usage}; price $${product.price}; ${inventoryCount(product, store)} in ${store}; fit ${product.score || 90}; reason ${product.why || ""}`).join("\n")}
+${recommendation.outfit.map((product) => `- id ${product.id}: ${product.productDisplayName}; role ${product.role}; ${product.articleType}; ${product.baseColour}; selected size ${sizeForProduct(product, recommendation.customerSizing) || "not applicable"}; season ${product.season}; usage ${product.usage}; price $${product.price}; ${inventoryCount(product, store)} in ${store}; fit ${product.score || 90}; reason ${product.why || ""}`).join("\n")}
 
 Substitute options:
 ${(recommendation.substitutions || []).slice(0, 2).map((product) => `- id ${product.id}: ${product.productDisplayName}; substitute for id ${product.forProductId}; ${product.articleType}; ${product.baseColour}; price $${product.price}; ${inventoryCount(product, store)} in ${store}`).join("\n") || "- none"}
@@ -1929,6 +1991,7 @@ Return only JSON with:
 Constraints:
 - Do not invent products, prices, colors, inventory, stores, reservations, purchases, holds, or delivery promises.
 - Do not say an item is available today unless the count above supports it.
+- Mention saved sizes as preferences only; do not claim size-level stock has been checked.
 - Mention the selected store only when using the exact store name above.
 - Keep the tone premium retail stylist: direct, useful, and specific.
 - The items array must include each outfit product id exactly once: ${recommendation.outfit.map((product) => product.id).join(", ")}.`
@@ -1967,6 +2030,7 @@ function buildBrazeTriggerProperties({ firstName = "", recommendation, emailCopy
   const store = recommendation.store || "your selected store";
   const outfit = (recommendation.outfit || []).slice(0, 4);
   const starterImage = absoluteImageUrl(recommendation.reference);
+  const sizeSummary = customerSizingSummary(recommendation.customerSizing);
   const props = {
     email_subject: compactText(emailCopy.email_subject, fallbackCopy.email_subject),
     customer_first_name: compactText(firstName, "there"),
@@ -1983,6 +2047,7 @@ function buildBrazeTriggerProperties({ firstName = "", recommendation, emailCopy
     basket_value: recommendation.business?.basketValue || outfit.reduce((sum, product) => sum + Number(product.price || 0), 0),
     outfit_count: recommendation.outfit?.length || outfit.length,
     available_today_count: recommendation.business?.availableToday || outfit.filter((product) => inventoryCount(product, store) > 0).length,
+    customer_sizes: sizeSummary,
     starter_item_name: compactText(recommendation.reference?.productDisplayName || recommendation.analysis?.item, "Starter item"),
     starter_note: compactText(emailCopy.starter_note, fallbackCopy.starter_note),
     associate_note: compactText(emailCopy.associate_note, fallbackCopy.associate_note),
@@ -1996,7 +2061,13 @@ function buildBrazeTriggerProperties({ firstName = "", recommendation, emailCopy
     props[`item_${number}_name`] = product.productDisplayName;
     props[`item_${number}_role`] = titleCase(product.role || product.articleType || "Outfit piece");
     props[`item_${number}_image_url`] = absoluteImageUrl(product);
-    props[`item_${number}_meta`] = `${product.articleType || "Item"} / ${product.baseColour || "Colour"} / ${inventoryCount(product, store)} in store`;
+    props[`item_${number}_meta`] = [
+      product.articleType || "Item",
+      product.baseColour || "Colour",
+      sizeForProduct(product, recommendation.customerSizing) ? `Size ${sizeForProduct(product, recommendation.customerSizing)}` : "",
+      `${inventoryCount(product, store)} in store`
+    ].filter(Boolean).join(" / ");
+    props[`item_${number}_selected_size`] = sizeForProduct(product, recommendation.customerSizing);
     props[`item_${number}_why`] = itemCopy.why;
     props[`item_${number}_pairing_note`] = itemCopy.pairing_note;
     props[`item_${number}_price`] = product.price || 0;
@@ -2023,7 +2094,7 @@ async function sendOutfitEmail({ email, firstName = "", recommendation }) {
     throw httpError(503, "Braze email delivery is not configured.");
   }
 
-  // Generation pass: OpenAI turns the grounded basket into rich email copy while app code keeps product, price, inventory, and image facts deterministic.
+  // Generation pass: OpenAI turns the catalogue-backed basket into rich email copy while app code keeps product, price, inventory, and image facts deterministic.
   const emailCopy = await generateOutfitEmailCopy({ firstName, recommendation });
   const triggerProperties = buildBrazeTriggerProperties({ firstName, recommendation, emailCopy });
   // Braze delivery layer: send only campaign trigger properties, letting the saved Liquid template render the final email.
@@ -2189,7 +2260,7 @@ ${lookupResults.matches.map((item) => `- ${item.productDisplayName}; ${item.arti
       try {
         const copy = await chatJson([
           { role: "system", content: "Return only valid JSON with a concise assistantMessage string." },
-          { role: "user", content: `Rewrite this as a helpful 2-3 sentence stylist chat response.\n\nCustomer asked: ${message}\n\nGrounded explanation:\n${explanation}` }
+          { role: "user", content: `Rewrite this as a helpful 2-3 sentence stylist chat response.\n\nCustomer asked: ${message}\n\nCatalogue-backed explanation:\n${explanation}` }
         ], 350);
         assistantMessage = copy.assistantMessage || assistantMessage;
       } catch (error) {
@@ -2233,7 +2304,7 @@ ${lookupResults.matches.map((item) => `- ${item.productDisplayName}; ${item.arti
     ai
   });
   previewRecommendation.suggestedPrompts = await suggestFollowUpPrompts({ recommendation: previewRecommendation, lastMessage: message });
-  const assistantMessage = `I found a better option to preview: swap ${target.productDisplayName} for ${replacement.productDisplayName}. It keeps the basket grounded in local inventory and better matches "${wantsAlternative.arguments?.goal || inferred.goal}".`;
+  const assistantMessage = `I found a better option to preview: swap ${target.productDisplayName} for ${replacement.productDisplayName}. It keeps the basket checked against local inventory and better matches "${wantsAlternative.arguments?.goal || inferred.goal}".`;
 
   return {
     assistantMessage,
@@ -2279,7 +2350,7 @@ async function serveStatic(req, res) {
   if (!filePath.startsWith(publicDir)) return jsonResponse(res, 403, { error: "Forbidden" });
   try {
     await stat(filePath);
-    const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".svg": "image/svg+xml" };
+    const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".svg": "image/svg+xml", ".pdf": "application/pdf" };
     res.writeHead(200, { "content-type": types[extname(filePath)] || "application/octet-stream" });
     createReadStream(filePath).pipe(res);
   } catch {

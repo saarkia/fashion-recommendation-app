@@ -105,6 +105,45 @@
               <select name="store" id="store"></select>
             </label>
 
+            <fieldset class="size-fieldset">
+              <legend>Your sizes</legend>
+              <div class="size-grid">
+                <label>
+                  Shirt
+                  <select name="shirtSize" id="shirtSize">
+                    <option value="XS">XS</option>
+                    <option value="S">S</option>
+                    <option value="M" selected>M</option>
+                    <option value="L">L</option>
+                    <option value="XL">XL</option>
+                    <option value="XXL">XXL</option>
+                  </select>
+                </label>
+                <label>
+                  Trouser
+                  <select name="trouserSize" id="trouserSize">
+                    <option value="28W">28W</option>
+                    <option value="30W">30W</option>
+                    <option value="32W" selected>32W</option>
+                    <option value="34W">34W</option>
+                    <option value="36W">36W</option>
+                    <option value="38W">38W</option>
+                  </select>
+                </label>
+                <label>
+                  Shoe
+                  <select name="shoeSize" id="shoeSize">
+                    <option value="US 7">US 7</option>
+                    <option value="US 8">US 8</option>
+                    <option value="US 9" selected>US 9</option>
+                    <option value="US 10">US 10</option>
+                    <option value="US 11">US 11</option>
+                    <option value="US 12">US 12</option>
+                  </select>
+                </label>
+              </div>
+            </fieldset>
+
             <label>
               Budget
               <input name="budgetMax" id="budgetMax" type="range" min="150" max="650" step="25" value="375" />
