@@ -3,31 +3,31 @@ const architectureContent = {
     title: "Mission capture",
     primitive: "RetailNext frontend",
     body: "The shopper starts from a product or image, then adds occasion, style preference, store, budget, and urgency.",
-    value: "Business job: capture the event mission before retrieval starts, so the experience is solving a buying need rather than returning generic product search results."
+    value: "This captures the shopping brief before retrieval starts, so recommendations are based on the event and the store context."
   },
   understand: {
     title: "Intent understanding",
     primitive: "OpenAI API: Vision + Structured Outputs",
     body: "OpenAI extracts item type, colour, formality, seasonality, style direction, constraints, and required outfit slots from shopper input.",
-    value: "Technical enabler: ambiguous text and images become machine-readable JSON that can feed search, ranking, chat actions, associate notes, and evals."
+    value: "Text and images become machine-readable JSON that can feed search, ranking, chat actions, associate notes, and evals."
   },
   retrieve: {
     title: "Semantic retrieval",
     primitive: "OpenAI API + RetailNext catalogue",
     body: "OpenAI creates embeddings for the event and style search phrases; RetailNext compares them with prepared catalogue vectors and retrieves candidate SKUs.",
-    value: "Business job: find relevant styles even when the shopper does not know the right product taxonomy or exact category wording."
+    value: "This helps RetailNext find relevant styles when the shopper describes an occasion in their own words."
   },
   ground: {
     title: "Retail validation",
     primitive: "RetailNext deterministic logic",
     body: "Ranking and filtering enforce store stock, available-today urgency, budget, product role, outfit completeness, and substitution rules.",
-    value: "Technical enabler: the model can propose, but the application verifies what can actually be sold, fulfilled, and shown."
+    value: "The application verifies what can actually be sold, fulfilled, and shown before anything reaches the shopper."
   },
   activate: {
-    title: "Action layer",
+    title: "Actions and handoff",
     primitive: "OpenAI generation + RetailNext actions",
     body: "Mira uses generated language and action selection, while RetailNext validates basket changes, creates the associate handoff, sends Braze payloads, and highlights gaps.",
-    value: "Business job: turn one search session into a customer answer, store workflow, CRM touchpoint, and demand signal without inventing fulfilment facts."
+    value: "One session can support the customer answer, store handoff, CRM follow-up, and demand signal while stock and fulfilment facts stay checked by the application."
   }
 };
 
@@ -35,57 +35,57 @@ const platformContent = {
   vision: {
     title: "Multimodal understanding",
     body: "Reads a starter product image and extracts visual attributes such as item type, colour, formality cues, seasonality, and style notes.",
-    value: "Business job: shoppers often start from a photo or item they like, not a clean SKU, category, or query."
+    value: "Useful because shoppers often start from a photo or an item they like before they know the exact category or SKU."
   },
   structured: {
     title: "Structured Outputs",
-    body: "Turns event-driven language into predictable fields: starter analysis, outfit slots, occasion, formality, colour palette, budget, urgency, store, and constraints.",
-    value: "Technical enabler: model output becomes a contract the app can validate instead of free-form prose that is hard to govern."
+    body: "Maps event-driven language into predictable fields: starter analysis, outfit slots, occasion, formality, colour palette, budget, urgency, store, and constraints.",
+    value: "The app receives fields it can validate, log, and test."
   },
   embeddings: {
     title: "Embeddings",
-    body: "Retrieves catalogue products by meaning rather than keyword overlap, using the event mission and starter item as semantic context.",
-    value: "Business job: updated-style discovery works even when the shopper describes the need in human terms."
+    body: "Retrieves catalogue products using event and product meaning, with the starter item and shopping brief as context.",
+    value: "Updated-style discovery works better when the shopper describes the need in everyday language."
   },
   tools: {
     title: "Tool/action pattern",
     body: "Mira interprets follow-up chat such as 'make it cheaper', 'swap the shoes', or 'email this outfit' into structured operations.",
-    value: "Technical enabler: the app previews and validates each action before changing the basket or triggering downstream workflows."
+    value: "The app can preview and validate each action before changing the basket or triggering downstream workflows."
   },
   generation: {
     title: "Generation",
     body: "Creates shopper explanations, item reasons, substitution rationale, associate briefs, and Braze email copy from grounded product data.",
-    value: "Business job: one verified basket can support digital conversion, store clienteling, and lifecycle follow-up."
+    value: "One verified basket can support digital conversion, store clienteling, and lifecycle follow-up."
   },
   evals: {
     title: "Evals",
     body: "The prototype includes scenario checks; production would expand this into evals for budget adherence, availability truth, event fit, substitution quality, and hallucination prevention.",
-    value: "Technical enabler: RetailNext can test quality before scaling to more categories, stores, and customer segments."
+    value: "RetailNext can test quality before scaling to more categories, stores, and customer segments."
   },
   enterprise: {
     title: "Enterprise controls",
     body: "OpenAI handles interpretation and generation, while RetailNext keeps catalogue, inventory, customer, basket, and fulfilment data under application control.",
-    value: "Business job: move quickly on customer experience without giving the model authority over prices, stock, orders, or final commercial decisions."
+    value: "RetailNext can improve the customer experience while keeping prices, stock, orders, and final commercial decisions in its own systems."
   }
 };
 
 const stakeholderContent = {
   innovation: {
     title: "Head of Innovation lens",
-    body: "This is an AI experience customers can feel: it turns event intent into a complete outfit, then extends the same session into associate support and CRM follow-up.",
+    body: "This is a customer-facing use case with a clear journey: the shopper gets a complete outfit, and the same session can support stores and follow-up messaging.",
     bullets: [
-      "Differentiates RetailNext from generic product search and static recommendation carousels.",
-      "Creates a visible AI-assisted clienteling moment across digital and store channels.",
-      "Turns poor-review root causes into measurable intervention points for merchandising and operations."
+      "Improves event shopping on top of the existing product search experience.",
+      "Creates a visible assisted-selling moment across digital and store channels.",
+      "Links review themes to specific points to measure across merchandising and operations."
     ]
   },
   cto: {
     title: "CTO lens",
-    body: "The architecture keeps model reasoning bounded. OpenAI handles ambiguous interpretation, retrieval inputs, actions, and language; RetailNext systems retain authority over SKUs, stock, price, budget, fulfilment, and mutation.",
+    body: "The architecture gives OpenAI a bounded role. It helps with interpretation, retrieval inputs, actions, and language; RetailNext systems retain authority over SKUs, stock, price, budget, fulfilment, and basket changes.",
     bullets: [
-      "Grounded RAG reduces hallucinated product risk because the UI renders only catalogue SKUs.",
+      "The UI renders only catalogue SKUs, which reduces the risk of invented products.",
       "Structured outputs and action schemas create testable integration contracts.",
-      "Scenario evals, guardrails, and fallback paths give a route from prototype to production governance."
+      "Scenario evals, guardrails, and fallback paths provide a route from prototype to production governance."
     ]
   }
 };
