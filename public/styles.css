@@ -3173,7 +3173,10 @@ input[type="range"] {
 .brief-nav-button,
 .flow-node,
 .platform-button,
-.stakeholder-button {
+.stakeholder-button,
+.query-button,
+.channel-button,
+.value-button {
   border: 1px solid #111;
   background: #fff;
   color: #111;
@@ -3199,7 +3202,16 @@ input[type="range"] {
 .platform-button:focus-visible,
 .stakeholder-button.active,
 .stakeholder-button:hover,
-.stakeholder-button:focus-visible {
+.stakeholder-button:focus-visible,
+.query-button.active,
+.query-button:hover,
+.query-button:focus-visible,
+.channel-button.active,
+.channel-button:hover,
+.channel-button:focus-visible,
+.value-button.active,
+.value-button:hover,
+.value-button:focus-visible {
   background: #111;
   color: #fff;
 }
@@ -3357,6 +3369,32 @@ input[type="range"] {
   gap: 1px;
 }
 
+.query-interactive,
+.channel-interactive,
+.value-interactive {
+  display: grid;
+  grid-template-columns: 270px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.query-buttons,
+.channel-buttons,
+.value-buttons {
+  display: grid;
+  gap: 8px;
+}
+
+.query-button,
+.channel-button,
+.value-button {
+  min-height: 54px;
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 850;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
 .impact-strip div {
   display: grid;
   gap: 8px;
@@ -3443,11 +3481,15 @@ input[type="range"] {
 .intent-contrast p,
 .source-note-card p,
 .demo-bridge-grid p,
+.channel-strip span,
 .model-ladder em,
 .mission-board span,
 .architecture-detail p,
 .system-boundary li,
 .platform-detail p,
+.query-detail p,
+.channel-detail p,
+.value-detail p,
 .stakeholder-panel p,
 .stakeholder-panel li,
 .metric-card p,
@@ -3460,7 +3502,7 @@ input[type="range"] {
 
 .mission-board {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   border: 1px solid #111;
   background: #111;
   gap: 1px;
@@ -3484,6 +3526,27 @@ input[type="range"] {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+}
+
+.channel-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid #111;
+  background: #111;
+  gap: 1px;
+}
+
+.channel-strip div {
+  display: grid;
+  gap: 8px;
+  min-height: 120px;
+  background: #fffaf0;
+  padding: 16px;
+}
+
+.channel-strip strong {
+  font-size: 1.05rem;
+  text-transform: uppercase;
 }
 
 .demo-bridge-grid article {
@@ -3683,6 +3746,9 @@ input[type="range"] {
 .architecture-detail,
 .platform-detail,
 .stakeholder-panel,
+.query-detail,
+.channel-detail,
+.value-detail,
 .closing-statement {
   border: 1px solid #111;
   background: #fffaf0;
@@ -3695,6 +3761,57 @@ input[type="range"] {
 
 .architecture-detail h3 {
   font-size: 1.8rem;
+}
+
+.query-detail h3,
+.channel-detail h3,
+.platform-detail h3,
+.value-detail h3 {
+  margin-bottom: 14px;
+  font-size: clamp(1.5rem, 2.4vw, 2.2rem);
+  line-height: 1.05;
+}
+
+.chat-example {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #111;
+  background: #fff;
+  padding: 14px;
+}
+
+.chat-example span,
+.detail-columns span {
+  display: block;
+  margin-bottom: 8px;
+  color: #0b6b42;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.chat-example strong {
+  font-size: clamp(1.2rem, 2.5vw, 2rem);
+  line-height: 1.08;
+}
+
+.detail-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.detail-columns > div {
+  border: 1px solid #111;
+  background: #fff;
+  padding: 14px;
+}
+
+.channel-detail .detail-columns,
+.value-detail .detail-columns {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .architecture-detail strong,
@@ -3879,12 +3996,16 @@ input[type="range"] {
 
   .brief-hero,
   .architecture-demo,
-  .platform-interactive {
+  .platform-interactive,
+  .query-interactive,
+  .channel-interactive,
+  .value-interactive {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .mission-board,
   .impact-strip,
+  .channel-strip,
   .demo-bridge-grid,
   .model-ladder,
   .brief-grid.four {
@@ -3947,12 +4068,19 @@ input[type="range"] {
   .brief-grid.four,
   .mission-board,
   .impact-strip,
+  .channel-strip,
   .intent-contrast,
   .demo-bridge-grid,
   .model-ladder,
   .generate-sequence,
   .system-boundary,
   .rollout-timeline,
+  .query-interactive,
+  .channel-interactive,
+  .value-interactive,
+  .detail-columns,
+  .channel-detail .detail-columns,
+  .value-detail .detail-columns,
   .architecture-flow {
     grid-template-columns: minmax(0, 1fr);
   }

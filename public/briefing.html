@@ -27,9 +27,9 @@
       <aside class="brief-rail" aria-label="Briefing sections">
         <p class="eyebrow">Executive narrative</p>
         <button class="brief-nav-button active" type="button" data-target="situation">01 What we heard</button>
-        <button class="brief-nav-button" type="button" data-target="search-gap">02 Search gap</button>
-        <button class="brief-nav-button" type="button" data-target="solution">03 Approach</button>
-        <button class="brief-nav-button" type="button" data-target="demo-bridge">04 Demo bridge</button>
+        <button class="brief-nav-button" type="button" data-target="search-gap">02 Engagement gap</button>
+        <button class="brief-nav-button" type="button" data-target="solution">03 Assistant approach</button>
+        <button class="brief-nav-button" type="button" data-target="demo-bridge">04 Channels</button>
         <button class="brief-nav-button" type="button" data-target="sequence">05 Generate flow</button>
         <button class="brief-nav-button" type="button" data-target="architecture">06 Architecture</button>
         <button class="brief-nav-button" type="button" data-target="platform">07 Why OpenAI</button>
@@ -41,10 +41,10 @@
         <section class="brief-hero" aria-labelledby="briefHeroTitle">
           <div>
             <p class="eyebrow">RetailNext x OpenAI</p>
-            <h1 id="briefHeroTitle">Helping customers find event outfits that are actually in stock.</h1>
+            <h1 id="briefHeroTitle">OpenAI-powered event shopping assistant for RetailNext.</h1>
             <p>
-              RetailNext shoppers arrive with an occasion, a deadline, and often a specific store in mind. This briefing shows how OpenAI can help
-              interpret that brief while RetailNext keeps control of product, inventory, price, and fulfilment decisions.
+              A natural language assistant that helps shoppers describe what they need, checks real inventory, and carries the journey into web,
+              app, WhatsApp, associate, and CRM channels.
             </p>
             <div class="brief-hero-actions">
               <button id="startBrief" class="primary-button brief-start" type="button">
@@ -56,16 +56,16 @@
           </div>
           <div class="brief-proof-strip" aria-label="Briefing proof points">
             <div>
-              <strong>Customer</strong>
-              <span>event-ready outfits with store availability shown before the visit</span>
+              <strong>Chat-first</strong>
+              <span>customers ask in natural language or share a photo</span>
             </div>
             <div>
-              <strong>Associate</strong>
-              <span>clear handoff notes, item rationale, and substitution paths</span>
+              <strong>Stock aware</strong>
+              <span>SKU, store, size, and price checked before display</span>
             </div>
             <div>
-              <strong>Business</strong>
-              <span>visibility into missed demand, low stock, and failed missions</span>
+              <strong>Channel ready</strong>
+              <span>same assistant pattern across site, app, WhatsApp, store, and CRM</span>
             </div>
           </div>
         </section>
@@ -73,27 +73,24 @@
         <section id="situation" class="brief-section" data-brief-step>
           <div class="brief-section-copy">
             <p class="eyebrow">01 What we heard</p>
-            <h2>RetailNext is losing high-intent shoppers when style discovery and local availability are disconnected.</h2>
-            <p>
-              The pattern from reviews is clear: customers struggle to find current styles or confirm that specific items are available in store
-              for upcoming events. That affects conversion, store workload, and confidence in the RetailNext experience.
-            </p>
+            <h2>Event shoppers struggle to find or confirm the right items quickly.</h2>
+            <p>Reviews point to the same issue: discovery, availability, and store confidence are split across the journey.</p>
           </div>
           <div class="brief-grid three problem-grid">
             <article class="brief-card">
-              <span>Customer signal</span>
-              <h3>"I know the occasion."</h3>
-              <p>Customers describe intent: a wedding guest look, a first-day outfit, a last-minute party, or something current in store.</p>
+              <span>Customer</span>
+              <h3>Occasion-led demand</h3>
+              <p>"I need something for a winter wedding" is a better brief than "black dress".</p>
             </article>
             <article class="brief-card">
-              <span>Friction point</span>
-              <h3>Search and inventory answer separately.</h3>
-              <p>A relevant recommendation can still fail if the item is unavailable locally, unsuitable for the event, or hard to complete as a basket.</p>
+              <span>Store</span>
+              <h3>Availability uncertainty</h3>
+              <p>Customers and associates still need to confirm store, size, substitutes, and timing.</p>
             </article>
             <article class="brief-card">
-              <span>Business impact</span>
-              <h3>Failed missions become poor reviews.</h3>
-              <p>High-urgency shopping journeys create lower tolerance for friction, more associate lookup time, and less visibility into missed demand.</p>
+              <span>Business</span>
+              <h3>High-intent friction</h3>
+              <p>Event shoppers have urgency, higher basket potential, and lower tolerance for failed searches.</p>
             </article>
           </div>
           <div class="impact-strip" aria-label="RetailNext pain points">
@@ -105,107 +102,83 @@
 
         <section id="search-gap" class="brief-section" data-brief-step>
           <div class="brief-section-copy">
-            <p class="eyebrow">02 Search gap</p>
-            <h2>People shop with intention. Search often starts with keywords.</h2>
-            <p>
-              Event-based shopping includes context that a short query rarely captures: formality, weather, season, colour, budget, urgency,
-              and whether the look can be found in a local store today.
-            </p>
+            <p class="eyebrow">02 Engagement gap</p>
+            <h2>The interface matters: chat captures more of the buying mission.</h2>
+            <p>Customers are more likely to engage when they can explain the occasion in their own words.</p>
           </div>
 
-          <div class="intent-contrast" aria-label="Keyword search versus event intent">
-            <article>
-              <span>Traditional search</span>
-              <h3>Black dress</h3>
-              <p>Returns product matches, then leaves the shopper or associate to work through event fit, complementary items, substitutes, and availability.</p>
-            </article>
-            <article>
-              <span>Intent-led shopping</span>
-              <h3>Smart outfit for a winter wedding in New York</h3>
-              <p>Uses the full shopping brief to retrieve relevant products, check store stock, and explain a complete outfit.</p>
-            </article>
+          <div class="query-interactive" aria-label="Shopping input examples">
+            <div class="query-buttons">
+              <button type="button" class="query-button" data-query="keyword">Keyword search</button>
+              <button type="button" class="query-button active" data-query="chat">Natural language chat</button>
+              <button type="button" class="query-button" data-query="photo">Photo + chat</button>
+              <button type="button" class="query-button" data-query="whatsapp">WhatsApp prompt</button>
+            </div>
+            <article class="query-detail" id="queryDetail" aria-live="polite"></article>
           </div>
 
           <div class="source-note-card">
-            <p class="eyebrow">Strategic shift</p>
-            <p>
-              The same shopping brief can support search, stock checks, associate handoff, and follow-up. That is where the demo is focused.
-            </p>
+            <p class="eyebrow">Core point</p>
+            <p>OpenAI gives RetailNext a conversational front door for product discovery and a structured bridge into retail systems.</p>
           </div>
         </section>
 
         <section id="solution" class="brief-section" data-brief-step>
           <div class="brief-section-copy">
-            <p class="eyebrow">03 Approach</p>
-            <h2>RetailNext Event Stylist connects the customer brief with catalogue, stock, and next actions.</h2>
-            <p>
-              The prototype builds on the OpenAI clothing RAG cookbook and adds the retail checks an executive demo needs. OpenAI helps interpret
-              the shopper's request; RetailNext systems decide what is eligible, available, affordable, and appropriate to show.
-            </p>
+            <p class="eyebrow">03 Assistant approach</p>
+            <h2>An inventory-grounded AI assistant for event shopping.</h2>
+            <p>OpenAI interprets text, images, and follow-up chat. RetailNext verifies products, stock, price, and fulfilment.</p>
           </div>
           <div class="mission-board" aria-label="Solution flow">
-            <div><strong>Understand</strong><span>Interpret item image, event, style, budget, store, and urgency</span></div>
-            <div><strong>Retrieve</strong><span>Use embeddings to find catalogue candidates by event and product meaning</span></div>
-            <div><strong>Ground</strong><span>Apply SKU truth: inventory, price, role, budget, fulfilment, and substitutes</span></div>
-            <div><strong>Activate</strong><span>Render basket, preview chat changes, brief associates, and trigger lifecycle follow-up</span></div>
+            <div><strong>Understand</strong><span>Text, image, occasion, style, budget, store</span></div>
+            <div><strong>Retrieve</strong><span>Semantic catalogue matches</span></div>
+            <div><strong>Ground</strong><span>SKU, inventory, price, size, fulfilment</span></div>
+            <div><strong>Converse</strong><span>Swap, explain, refine, email</span></div>
+            <div><strong>Activate</strong><span>Basket, associate handoff, CRM follow-up</span></div>
           </div>
           <div class="brief-grid two">
             <article class="brief-card emphasis">
-              <span>What OpenAI does</span>
-              <h3>Makes shopper intent usable by the application.</h3>
-              <p>Vision analysis, structured outputs, semantic search queries, chat-to-action reasoning, shopper explanations, and guardrail review.</p>
+              <span>OpenAI role</span>
+              <h3>Understand and converse</h3>
+              <p>Intent extraction, image understanding, semantic retrieval inputs, action selection, explanations, and review.</p>
             </article>
             <article class="brief-card">
-              <span>What RetailNext controls</span>
-              <h3>Keeps final control of what is shown and sold.</h3>
-              <p>Only catalogue SKUs are recommended. Price, stock, budget, fulfilment, substitutions, basket mutation, and CRM delivery stay deterministic.</p>
+              <span>RetailNext role</span>
+              <h3>Control retail decisions</h3>
+              <p>Catalogue SKUs, price, stock, store rules, basket changes, fulfilment, and CRM delivery.</p>
             </article>
           </div>
         </section>
 
         <section id="demo-bridge" class="brief-section" data-brief-step>
           <div class="brief-section-copy">
-            <p class="eyebrow">04 Demo bridge</p>
-            <h2>The live app makes the business case visible in one shopper journey.</h2>
-            <p>
-              The demo starts from a selected or uploaded starter item, builds a complete outfit for an event, then shows the same session becoming
-              a basket, a store handoff, and a demand signal.
-            </p>
+            <p class="eyebrow">04 Channels</p>
+            <h2>The chatbot pattern can sit wherever customers already shop.</h2>
+            <p>One assistant workflow can serve the website, mobile app, WhatsApp, associates, and lifecycle messaging.</p>
           </div>
 
-          <div class="demo-bridge-grid" aria-label="Demo value bridge">
-            <article>
-              <img src="/catalog-images/27152.jpg" alt="Blue shirt starter item" />
-              <div>
-                <span>Customer</span>
-                <h3>Complete look with store confidence</h3>
-                <p>The shopper sees fit scores, item rationale, price, and local stock before travelling to a store.</p>
-              </div>
-            </article>
-            <article>
-              <img src="/catalog-images/16171.jpg" alt="Formal shoe recommendation" />
-              <div>
-                <span>Associate</span>
-                <h3>A clearer handoff</h3>
-                <p>Mira summarises why the outfit works, which items are low stock, and what substitutes protect the basket.</p>
-              </div>
-            </article>
-            <article>
-              <img src="/catalog-images/10469.jpg" alt="Yellow polo starter item" />
-              <div>
-                <span>Business</span>
-                <h3>A usable signal from failed searches</h3>
-                <p>Unmet event intent and stock gaps become inputs for allocation, buying, clienteling, and recovery workflows.</p>
-              </div>
-            </article>
+          <div class="channel-interactive" aria-label="Channel deployment options">
+            <div class="channel-buttons">
+              <button type="button" class="channel-button active" data-channel="web">Web and app</button>
+              <button type="button" class="channel-button" data-channel="whatsapp">WhatsApp</button>
+              <button type="button" class="channel-button" data-channel="associate">Associate tool</button>
+              <button type="button" class="channel-button" data-channel="crm">Braze follow-up</button>
+            </div>
+            <article class="channel-detail" id="channelDetail" aria-live="polite"></article>
+          </div>
+
+          <div class="channel-strip" aria-label="Assistant channel flow">
+            <div><strong>Ask</strong><span>natural language or photo</span></div>
+            <div><strong>Verify</strong><span>stock, size, price, fulfilment</span></div>
+            <div><strong>Act</strong><span>basket, handoff, message, recovery</span></div>
           </div>
         </section>
 
         <section id="sequence" class="brief-section" data-brief-step>
           <div class="brief-section-copy">
             <p class="eyebrow">05 Generate flow</p>
-            <h2>When the customer clicks Generate outfit, OpenAI proposes and RetailNext verifies.</h2>
-            <p>The flow keeps OpenAI focused on interpretation and language, while the app checks SKU, price, stock, budget, and fulfilment rules.</p>
+            <h2>Generate outfit: propose, verify, display.</h2>
+            <p>The boundary is simple: OpenAI interprets and explains; RetailNext validates what can be shown and sold.</p>
           </div>
 
           <div class="source-legend" aria-label="Responsibility legend">
@@ -218,65 +191,65 @@
             <article class="sequence-step retailnext-owned">
               <span>1</span>
               <div class="step-source"><em>RetailNext frontend</em></div>
-              <h3>Capture the mission</h3>
-              <p>The browser gathers starter item or image, occasion, style, store, budget, and urgency. No OpenAI call has happened yet.</p>
+              <h3>Capture brief</h3>
+              <p>Occasion, image, store, budget, style, urgency.</p>
               <code>public/app.js → requestRecommendations()</code>
             </article>
             <article class="sequence-step retailnext-owned">
               <span>2</span>
               <div class="step-source"><em>RetailNext backend</em></div>
-              <h3>Resolve retail constraints</h3>
-              <p>The backend resolves event, style, store, budget, urgency, and starter-product context before any recommendation is built.</p>
+              <h3>Resolve constraints</h3>
+              <p>Store, size, budget, timing, starter-product context.</p>
               <code>POST /api/recommend</code>
             </article>
             <article class="sequence-step openai-owned">
               <span>3</span>
               <div class="step-source"><em>OpenAI API</em></div>
-              <h3>Structure the shopper brief</h3>
-              <p>GPT-4o mini reads the starter image and returns structured JSON: attributes, event fit, outfit roles, and catalogue search phrases.</p>
+              <h3>Structure intent</h3>
+              <p>GPT-4o mini returns attributes, outfit roles, and search phrases.</p>
               <code>analyzeReferenceWithOpenAI()</code>
             </article>
             <article class="sequence-step hybrid-owned">
               <span>4</span>
               <div class="step-source"><em>OpenAI API + RetailNext vectors</em></div>
-              <h3>Retrieve relevant SKUs</h3>
-              <p>OpenAI embeds the search phrases; RetailNext compares those vectors with catalogue embeddings to find meaning-based product candidates.</p>
+              <h3>Retrieve SKUs</h3>
+              <p>Embeddings match the event brief to catalogue vectors.</p>
               <code>text-embedding-3-large + cosine search</code>
             </article>
             <article class="sequence-step retailnext-owned">
               <span>5</span>
               <div class="step-source"><em>RetailNext rules</em></div>
-              <h3>Filter with retail rules</h3>
-              <p>The app scores candidates by store stock, budget, urgency, outfit role, colour harmony, event fit, and starter-item similarity.</p>
+              <h3>Apply retail rules</h3>
+              <p>Stock, budget, urgency, outfit role, colour, event fit.</p>
               <code>candidateScore() + guardrail()</code>
             </article>
             <article class="sequence-step hybrid-owned">
               <span>6</span>
               <div class="step-source"><em>OpenAI copy + RetailNext facts</em></div>
-              <h3>Explain and review the basket</h3>
-              <p>RetailNext calculates basket facts; OpenAI writes grounded rationale and performs a final stylist review against the actual products.</p>
+              <h3>Explain and review</h3>
+              <p>OpenAI writes rationale and reviews the actual basket.</p>
               <code>generateBusinessCopy() + reviewOutfitWithOpenAI()</code>
             </article>
             <article class="sequence-step retailnext-owned">
               <span>7</span>
               <div class="step-source"><em>RetailNext UI</em></div>
-              <h3>Show the validated result</h3>
-              <p>The customer sees products, availability, rationale, Mira chat, and add-to-basket prompts based on the server-validated response.</p>
+              <h3>Display result</h3>
+              <p>Products, availability, rationale, chat, add-to-basket.</p>
               <code>renderResult()</code>
             </article>
           </div>
 
           <div class="sequence-output">
             <strong>Important boundary</strong>
-            <p>OpenAI provides interpretation, retrieval intent, rationale, and language. RetailNext owns catalogue data, SKU eligibility, price, inventory, fulfilment rules, basket state, and the final response shown to the shopper.</p>
+            <p>OpenAI never becomes the source of product truth. RetailNext owns catalogue data, price, stock, basket state, and fulfilment rules.</p>
           </div>
         </section>
 
         <section id="architecture" class="brief-section" data-brief-step>
           <div class="brief-section-copy">
             <p class="eyebrow">06 Architecture</p>
-            <h2>OpenAI supports interpretation. RetailNext keeps control of retail facts.</h2>
-            <p>Click through the flow to show which components use OpenAI and which remain controlled by RetailNext application logic.</p>
+            <h2>Flexible conversation, controlled retail decisions.</h2>
+            <p>Click through the flow to show the OpenAI and RetailNext boundary.</p>
           </div>
 
           <div class="architecture-demo">
@@ -309,21 +282,21 @@
             <div>
               <p class="eyebrow">OpenAI API powered</p>
               <ul>
-                <li>Vision reads uploaded or selected starter-item images</li>
-                <li>Structured JSON maps shopper input into item attributes, roles, and search intent</li>
-                <li>Embeddings create semantic vectors for event and product retrieval</li>
-                <li>Tool patterns map chat requests to explain, lookup, or preview operations</li>
-                <li>Generation writes shopper rationale, associate notes, email copy, and final review</li>
+                <li>Text and image understanding</li>
+                <li>Structured JSON shopping briefs</li>
+                <li>Embeddings for semantic retrieval</li>
+                <li>Tool patterns for chat actions</li>
+                <li>Grounded generation for shopper and associate copy</li>
               </ul>
             </div>
             <div>
               <p class="eyebrow">RetailNext owned</p>
               <ul>
-                <li>Frontend form, upload, generation trigger, result rendering, and basket state</li>
-                <li>Catalogue, SKU metadata, product images, prices, and store inventory truth</li>
-                <li>Budget, local availability, urgency, role matching, substitution, and fulfilment validation</li>
-                <li>Preview/apply safety so Mira cannot mutate a basket until the app validates the change</li>
-                <li>Business KPIs, missed-demand signal, deployment, and CRM/Braze handoff</li>
+                <li>Customer surfaces and basket state</li>
+                <li>Catalogue, product images, prices, and inventory</li>
+                <li>Budget, availability, substitutes, and fulfilment rules</li>
+                <li>Preview/apply safety for basket changes</li>
+                <li>Business KPIs, channel deployment, and CRM handoff</li>
               </ul>
             </div>
           </div>
@@ -332,17 +305,17 @@
         <section id="platform" class="brief-section" data-brief-step>
           <div class="brief-section-copy">
             <p class="eyebrow">07 Why OpenAI</p>
-            <h2>OpenAI is a strong fit because the workflow uses several capabilities together.</h2>
-            <p>RetailNext needs image and text understanding, semantic retrieval, structured integration, action safety, reliable generation, and a practical evaluation path.</p>
+            <h2>OpenAI is the platform layer for the assistant loop.</h2>
+            <p>Multimodal understanding, structured outputs, embeddings, model choice, tool actions, and evals work together in one pattern.</p>
           </div>
 
           <div class="platform-interactive">
             <div class="platform-buttons" aria-label="OpenAI platform capabilities">
-              <button type="button" class="platform-button active" data-platform="vision">Vision</button>
+              <button type="button" class="platform-button active" data-platform="vision">Multimodal</button>
               <button type="button" class="platform-button" data-platform="structured">Structured outputs</button>
               <button type="button" class="platform-button" data-platform="embeddings">Embeddings</button>
-              <button type="button" class="platform-button" data-platform="tools">Tool calling pattern</button>
-              <button type="button" class="platform-button" data-platform="generation">Generation</button>
+              <button type="button" class="platform-button" data-platform="ladder">Model ladder</button>
+              <button type="button" class="platform-button" data-platform="tools">Tool actions</button>
               <button type="button" class="platform-button" data-platform="evals">Evals</button>
               <button type="button" class="platform-button" data-platform="enterprise">Enterprise controls</button>
             </div>
@@ -350,78 +323,86 @@
           </div>
 
           <div class="model-ladder" aria-label="Model ladder">
-            <div><span>Intent</span><strong>GPT-4o mini</strong><em>vision + structured shopping brief</em></div>
+            <div><span>Intent</span><strong>GPT-4o mini</strong><em>text, image, shopping brief</em></div>
             <div><span>Retrieval</span><strong>text-embedding-3-large</strong><em>semantic catalogue search</em></div>
-            <div><span>Actions</span><strong>Responses-style tools</strong><em>explain, lookup, preview, email</em></div>
-            <div><span>Governance</span><strong>Evals + app guardrails</strong><em>availability truth and hallucination checks</em></div>
+            <div><span>Reasoning</span><strong>GPT-4.1</strong><em>review, rationale, copy</em></div>
+            <div><span>Governance</span><strong>Evals + guardrails</strong><em>quality, latency, cost, risk</em></div>
           </div>
         </section>
 
         <section id="value" class="brief-section" data-brief-step>
           <div class="brief-section-copy">
             <p class="eyebrow">08 Business outcomes</p>
-            <h2>The value is fewer failed shopping journeys, stronger basket confidence, and better store execution.</h2>
-            <p>Use the stakeholder toggle to frame the same solution for the Head of Innovation or CTO.</p>
+            <h2>Business value map for RetailNext.</h2>
+            <p>Use the value toggle to connect OpenAI capabilities to measurable retail outcomes.</p>
           </div>
 
-          <div class="stakeholder-toggle" role="tablist" aria-label="Stakeholder lens">
-            <button type="button" class="stakeholder-button active" data-lens="innovation" role="tab" aria-selected="true">Head of Innovation</button>
-            <button type="button" class="stakeholder-button" data-lens="cto" role="tab" aria-selected="false">CTO</button>
+          <div class="value-interactive" aria-label="Business value drivers">
+            <div class="value-buttons" role="tablist" aria-label="Business value lens">
+              <button type="button" class="value-button active" data-value="conversion" role="tab" aria-selected="true">Event conversion</button>
+              <button type="button" class="value-button" data-value="friction" role="tab" aria-selected="false">Availability friction</button>
+              <button type="button" class="value-button" data-value="efficiency" role="tab" aria-selected="false">Store efficiency</button>
+              <button type="button" class="value-button" data-value="learning" role="tab" aria-selected="false">Demand learning</button>
+            </div>
+            <article class="value-detail" id="valueDetail" aria-live="polite"></article>
           </div>
-          <article class="stakeholder-panel" id="stakeholderPanel" aria-live="polite"></article>
 
           <div class="brief-grid four">
             <article class="brief-card metric-card">
               <span>Experience</span>
-              <strong>Fewer dead-end journeys</strong>
-              <p>Customers see event fit and local availability before travelling to store.</p>
+              <strong>Better engagement</strong>
+              <p>Natural language lowers the effort to start.</p>
             </article>
             <article class="brief-card metric-card">
               <span>Revenue</span>
               <strong>Stronger event conversion</strong>
-              <p>Complete outfits and substitute options protect attachment because the customer sees a workable basket.</p>
+              <p>Complete outfits increase basket confidence.</p>
             </article>
             <article class="brief-card metric-card">
               <span>Operations</span>
               <strong>Less manual lookup</strong>
-              <p>Associates get the item list, rationale, inventory context, and backup options in one place.</p>
+              <p>Associates get item rationale and backup options.</p>
             </article>
             <article class="brief-card metric-card">
               <span>Planning</span>
               <strong>Demand signal</strong>
-              <p>Unmet event intent and stock gaps become inputs to transfer and replenishment decisions.</p>
+              <p>Unmet intent informs allocation and recovery.</p>
             </article>
+          </div>
+
+          <div class="source-note-card benchmark-card">
+            <p class="eyebrow">Relevant OpenAI retail proof point</p>
+            <p>Zalando reported +23% product clicks and 40%+ wishlist additions after improving its OpenAI-powered assistant. RetailNext would validate its own results in pilot.</p>
           </div>
         </section>
 
         <section id="rollout" class="brief-section" data-brief-step>
           <div class="brief-section-copy">
             <p class="eyebrow">09 Rollout</p>
-            <h2>Start with a narrow pilot, measure the journey, then expand.</h2>
-            <p>This lets RetailNext prove value while the technical controls mature.</p>
+            <h2>Crawl, walk, run.</h2>
+            <p>Prove engagement first, then integrate operations and expand channels.</p>
           </div>
           <div class="rollout-timeline" aria-label="Rollout timeline">
             <article>
-              <span>30 days</span>
-              <h3>Crawl: validate demand</h3>
-              <p>Pilot wedding guest, work event, and vacation journeys. Measure completed baskets, availability rate, refinement prompts, and feedback.</p>
+              <span>0-8 weeks</span>
+              <h3>Crawl</h3>
+              <p>Text assistant, limited categories, selected stores, static inventory snapshot.</p>
             </article>
             <article>
-              <span>60 days</span>
-              <h3>Walk: integrate operations</h3>
-              <p>Connect PIM, POS inventory, OMS fulfilment, preferences, Braze messaging, and associate workflows for selected stores.</p>
+              <span>2-4 months</span>
+              <h3>Walk</h3>
+              <p>Photo input, real-time inventory, guardrail tuning, WhatsApp pilot.</p>
             </article>
             <article>
-              <span>90 days</span>
-              <h3>Run: harden and scale</h3>
-              <p>Add evals for outfit coherence, substitution quality, availability truth, latency, cost, complaint rate, and conversion confidence.</p>
+              <span>Scale</span>
+              <h3>Run</h3>
+              <p>Associate assistant, CRM recovery, personalisation, continuous eval loop.</p>
             </article>
           </div>
           <div class="closing-statement">
             <p class="eyebrow">Closing line</p>
             <p>
-              "A strong first version should connect three things clearly: what the customer wants, what is available nearby,
-              and what the business can do next."
+              "Start with the customer conversation, ground it in RetailNext inventory, and measure the commercial journey end to end."
             </p>
           </div>
         </section>
