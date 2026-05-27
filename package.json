@@ -6,6 +6,7 @@
   "scripts": {
     "prepare:data": "python3 scripts/prepare_data.py",
     "eval": "node scripts/eval.mjs",
+    "render:briefing-pdf": "node scripts/render_briefing_pdf.mjs",
     "start": "node server/index.mjs"
   }
 }
