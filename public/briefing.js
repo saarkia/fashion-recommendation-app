@@ -24,7 +24,7 @@ const queryContent = {
     label: "WhatsApp prompt",
     title: "Same assistant, lower-friction channel",
     input: "Need an outfit for a wedding tomorrow. Can I collect it at Oxford Street?",
-    output: "The same structured assistant flow can respond in a messaging channel and hand off to store or CRM.",
+    output: "The same structured assistant flow can respond in a messaging channel and hand off to store or email follow-up.",
     value: "RetailNext can meet customers where they already communicate."
   }
 };
@@ -48,10 +48,10 @@ const channelContent = {
     enabler: "Grounded generation summarises verified product and inventory facts.",
     outcome: "Less manual lookup and a better handoff from digital to store."
   },
-  crm: {
-    title: "Braze follow-up",
+  email: {
+    title: "Email follow-up",
     job: "Turn the session into a timely lifecycle message.",
-    enabler: "Structured outputs provide product, event, stock, and copy fields for CRM payloads.",
+    enabler: "Structured outputs provide product, event, stock, and copy fields for email payloads.",
     outcome: "Abandoned missions can support personalised follow-up and recovery."
   }
 };
@@ -85,7 +85,7 @@ const architectureContent = {
     title: "Actions and handoff",
     primitive: "OpenAI generation + RetailNext actions",
     body: "The assistant explains, swaps, emails, briefs associates, and flags demand gaps.",
-    value: "One conversation becomes checkout support, store handoff, and CRM follow-up."
+    value: "One conversation becomes checkout support, store handoff, and email follow-up."
   }
 };
 
@@ -156,7 +156,7 @@ const valueContent = {
   learning: {
     title: "Create a demand learning loop",
     goal: "Capture unmet event intent and stock gaps.",
-    enabler: "Structured outputs + CRM and reporting payloads.",
+    enabler: "Structured outputs + email and reporting payloads.",
     metric: "Missed-demand themes, replenishment signals, recovery engagement."
   }
 };
