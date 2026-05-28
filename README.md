@@ -23,6 +23,22 @@ Open `http://localhost:4173`.
 
 The app also works without `OPENAI_API_KEY`; it uses the local fallback path.
 
+By default the live OpenAI path uses:
+
+- `gpt-5.4-nano` for low-latency image analysis, JSON extraction, and short copy tasks.
+- `gpt-5.4-mini` for the final visual recommendation review and tool-using chat agent.
+- `text-embedding-3-large` for semantic catalog retrieval.
+
+Optional model overrides:
+
+```bash
+OPENAI_MODEL_FAST="gpt-5.4-nano"
+OPENAI_MODEL_REASONING="gpt-5.4-mini"
+OPENAI_REASONING_EFFORT_FAST="low"
+OPENAI_REASONING_EFFORT_REASONING="medium"
+OPENAI_TEXT_VERBOSITY="low"
+```
+
 Optional Braze email delivery is configured server-side with:
 
 ```bash

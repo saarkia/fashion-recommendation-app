@@ -86,8 +86,13 @@ npm run prepare:data
 OpenAI support is controlled by environment variables:
 
 - `OPENAI_API_KEY`: Required for live OpenAI features.
-- `OPENAI_MODEL`: Optional, defaults to `gpt-4o-mini`.
+- `OPENAI_MODEL`: Optional legacy override for both model tiers.
+- `OPENAI_MODEL_FAST`: Optional, defaults to `gpt-5.4-nano` for fast image-analysis, JSON extraction, and copy tasks.
+- `OPENAI_MODEL_REASONING`: Optional, defaults to `gpt-5.4-mini` for final visual QA and tool-using chat.
 - `OPENAI_EMBEDDING_MODEL`: Optional, defaults to `text-embedding-3-large`.
+- `OPENAI_REASONING_EFFORT_FAST`: Optional, defaults to `low`.
+- `OPENAI_REASONING_EFFORT_REASONING`: Optional, defaults to `medium`.
+- `OPENAI_TEXT_VERBOSITY`: Optional, defaults to `low`.
 - `OPENAI_TIMEOUT_MS`: Optional, defaults to `20000`.
 
 On Vercel, `OPENAI_API_KEY` is already configured for production as of the latest handoff. Verify with:

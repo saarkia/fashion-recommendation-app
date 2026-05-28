@@ -12,9 +12,12 @@ const imageDir = join(publicDir, "catalog-images");
 const PORT = Number(process.env.PORT || 4173);
 const VECTOR_DIMS = 3072;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const OPENAI_MODEL_FAST = process.env.OPENAI_MODEL_FAST || process.env.OPENAI_MODEL || "gpt-4o-mini";
-const OPENAI_MODEL_REASONING = process.env.OPENAI_MODEL_REASONING || "gpt-4.1";
+const OPENAI_MODEL_FAST = process.env.OPENAI_MODEL_FAST || process.env.OPENAI_MODEL || "gpt-5.4-nano";
+const OPENAI_MODEL_REASONING = process.env.OPENAI_MODEL_REASONING || process.env.OPENAI_MODEL || "gpt-5.4-mini";
 const OPENAI_EMBEDDING_MODEL = process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-large";
+const OPENAI_REASONING_EFFORT_FAST = process.env.OPENAI_REASONING_EFFORT_FAST || process.env.OPENAI_REASONING_EFFORT || "low";
+const OPENAI_REASONING_EFFORT_REASONING = process.env.OPENAI_REASONING_EFFORT_REASONING || process.env.OPENAI_REASONING_EFFORT || "medium";
+const OPENAI_TEXT_VERBOSITY = process.env.OPENAI_TEXT_VERBOSITY || "low";
 const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || 20000);
 const BRAZE_REST_ENDPOINT = process.env.BRAZE_REST_ENDPOINT;
 const BRAZE_REST_API_KEY = process.env.BRAZE_REST_API_KEY;
@@ -183,6 +186,49 @@ function cleanJson(text) {
   return JSON.parse(fenced ? fenced[1] : trimmed);
 }
 
+function isGpt5Family(model = "") {
+  return /^gpt-5(?:[.\-]|$)/.test(String(model));
+}
+
+function reasoningEffortForModel(model) {
+  if (!isGpt5Family(model)) return null;
+  return model === OPENAI_MODEL_REASONING ? OPENAI_REASONING_EFFORT_REASONING : OPENAI_REASONING_EFFORT_FAST;
+}
+
+function toResponsesContent(content) {
+  if (!Array.isArray(content)) return content;
+  return content.map((part) => {
+    if (part?.type === "text") return { type: "input_text", text: part.text || "" };
+    if (part?.type === "image_url") {
+      return {
+        type: "input_image",
+        image_url: part.image_url?.url || part.image_url,
+        detail: part.image_url?.detail || "low"
+      };
+    }
+    return part;
+  });
+}
+
+function toResponsesInput(messages) {
+  return messages.map((message) => ({
+    ...message,
+    content: toResponsesContent(message.content)
+  }));
+}
+
+function gpt5ResponseOptions(model, { json = false } = {}) {
+  const options = {
+    text: {
+      verbosity: OPENAI_TEXT_VERBOSITY
+    }
+  };
+  if (json) options.text.format = { type: "json_object" };
+  const effort = reasoningEffortForModel(model);
+  if (effort) options.reasoning = { effort };
+  return options;
+}
+
 async function openaiFetch(path, body) {
   if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not set");
   const controller = new AbortController();
@@ -209,6 +255,16 @@ async function openaiFetch(path, body) {
 }
 
 async function chatJson(messages, maxTokens = 700, model = OPENAI_MODEL_FAST) {
+  if (isGpt5Family(model)) {
+    const payload = await openaiFetch("/responses", {
+      model,
+      input: toResponsesInput(messages),
+      max_output_tokens: maxTokens,
+      ...gpt5ResponseOptions(model, { json: true })
+    });
+    return cleanJson(responseText(payload) || "{}");
+  }
+
   const payload = await openaiFetch("/chat/completions", {
     model,
     messages,
@@ -219,15 +275,22 @@ async function chatJson(messages, maxTokens = 700, model = OPENAI_MODEL_FAST) {
   return cleanJson(payload.choices?.[0]?.message?.content || "{}");
 }
 
-async function responseWithTools(input, tools, maxOutputTokens = 900, model = OPENAI_MODEL_FAST) {
-  const payload = await openaiFetch("/responses", {
+async function responseWithTools(input, tools, maxOutputTokens = 900, model = OPENAI_MODEL_REASONING) {
+  const body = {
     model,
     input,
     tools,
     tool_choice: "auto",
-    temperature: 0.2,
     max_output_tokens: maxOutputTokens
-  });
+  };
+
+  if (isGpt5Family(model)) {
+    Object.assign(body, gpt5ResponseOptions(model));
+  } else {
+    body.temperature = 0.2;
+  }
+
+  const payload = await openaiFetch("/responses", body);
   return payload;
 }
 
@@ -1364,6 +1427,9 @@ async function recommend(payload) {
     model: OPENAI_MODEL_FAST,
     reasoningModel: OPENAI_MODEL_REASONING,
     embeddingModel: OPENAI_EMBEDDING_MODEL,
+    reasoningEffortFast: reasoningEffortForModel(OPENAI_MODEL_FAST),
+    reasoningEffortReview: reasoningEffortForModel(OPENAI_MODEL_REASONING),
+    textVerbosity: OPENAI_TEXT_VERBOSITY,
     errors: []
   };
 
@@ -2162,6 +2228,9 @@ async function runChatAgent(payload) {
     model: OPENAI_MODEL_FAST,
     reasoningModel: OPENAI_MODEL_REASONING,
     embeddingModel: OPENAI_EMBEDDING_MODEL,
+    reasoningEffortFast: reasoningEffortForModel(OPENAI_MODEL_FAST),
+    reasoningEffortReview: reasoningEffortForModel(OPENAI_MODEL_REASONING),
+    textVerbosity: OPENAI_TEXT_VERBOSITY,
     errors: [...(recommendation.ai?.errors || [])]
   };
   let calls = [];
@@ -2370,6 +2439,9 @@ export async function handler(req, res) {
         model: OPENAI_MODEL_FAST,
         reasoningModel: OPENAI_MODEL_REASONING,
         embeddingModel: OPENAI_EMBEDDING_MODEL,
+        reasoningEffortFast: reasoningEffortForModel(OPENAI_MODEL_FAST),
+        reasoningEffortReview: reasoningEffortForModel(OPENAI_MODEL_REASONING),
+        textVerbosity: OPENAI_TEXT_VERBOSITY,
         inspiration: pickInspiration()
       });
     }
