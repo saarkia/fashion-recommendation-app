@@ -499,6 +499,38 @@ function productGroup(articleType = "", subCategory = "") {
   return "other";
 }
 
+function groupFromRoleText(role = "") {
+  const text = String(role || "").toLowerCase();
+  if (/\b(shoe|shoes|sneaker|sneakers|trainer|trainers|heel|heels|flat|flats|sandal|sandals|footwear)\b/.test(text)) return "shoe";
+  if (/\b(trouser|trousers|pant|pants|jean|jeans|bottom|skirt|shorts)\b/.test(text)) return "bottom";
+  if (/\b(shirt|top|tee|tshirt|t-shirt|overshirt|layer)\b/.test(text)) return "top";
+  if (/\b(dress|saree|one[- ]?piece)\b/.test(text)) return "one-piece";
+  return null;
+}
+
+function replacementContinuityScore(product, target, { formal = false, casual = false } = {}) {
+  const targetGroup = productGroup(target.articleType, target.subCategory);
+  const productGroupName = productGroup(product.articleType, product.subCategory);
+  const explicitFormalityShift = formal || casual;
+  let score = 0;
+
+  if (productGroupName !== targetGroup) score -= 0.3;
+  if (product.articleType === target.articleType) score += 0.22;
+  else if (!explicitFormalityShift) score -= 0.16;
+
+  if (!explicitFormalityShift) {
+    if (product.usage === target.usage) score += 0.14;
+    else score -= 0.12;
+  }
+
+  if (targetGroup === "shoe" && target.articleType === "Formal Shoes" && !explicitFormalityShift) {
+    if (product.articleType === "Formal Shoes" || product.usage === "Formal") score += 0.18;
+    else if (["Casual", "Sports"].includes(product.usage) || /casual|sports/i.test(product.articleType)) score -= 0.32;
+  }
+
+  return score;
+}
+
 function sizeForProduct(product, customerSizing = {}) {
   const group = productGroup(product?.articleType, product?.subCategory);
   if (group === "shoe") return customerSizing.shoe || "";
@@ -869,7 +901,10 @@ async function findAlternativeProducts({ recommendation, chatState, args, messag
   const outfit = recommendation.outfit || [];
   const inferred = inferChatIntent(message, recommendation, chatState);
   const targetId = Number(args.targetProductId || inferred.targetProductId);
-  const target = outfit.find((product) => product.id === targetId) || outfit[0];
+  const requestedGroup = groupFromRoleText(args.targetRole || inferred.targetRole);
+  const target = outfit.find((product) => product.id === targetId)
+    || (requestedGroup ? outfit.find((product) => productGroup(product.articleType, product.subCategory) === requestedGroup) : null)
+    || outfit[0];
   if (!target) return { target: null, candidates: [] };
 
   const goal = [args.goal, inferred.goal, ...(chatState.preferences || [])].filter(Boolean).join("; ");
@@ -896,7 +931,7 @@ async function findAlternativeProducts({ recommendation, chatState, args, messag
     : buildEventQueryVector(event, style, gender, slot);
   const cheaper = /\b(cheaper|lower|budget|less expensive|price)\b/i.test(goal);
   const formal = /\b(formal|polished|professional|dressier|elevated)\b/i.test(goal);
-  const casual = /\b(casual|relaxed|comfortable|laid back)\b/i.test(goal);
+  const casual = /\b(casual|relaxed|comfortable|laid back|sneaker|sneakers|trainer|trainers|sport|sports)\b/i.test(goal);
   const differentColor = /\b(color|colour|brighter|darker|different color|different colour)\b/i.test(goal);
   const today = urgency === "today" || /\b(today|available|in store|pickup)\b/i.test(goal);
 
@@ -914,6 +949,7 @@ async function findAlternativeProducts({ recommendation, chatState, args, messag
       if (casual && product.usage === "Formal") score -= 0.08;
       if (cheaper) score += Math.max(0, (target.price - product.price) / Math.max(target.price, 1)) * 0.18;
       if (differentColor && product.baseColour !== target.baseColour) score += 0.1;
+      score += replacementContinuityScore(product, target, { formal, casual });
       return { product, score, fit: guardrail(reference, product, event, store, urgency) };
     })
     .filter((item) => item.fit.approved || !today)
