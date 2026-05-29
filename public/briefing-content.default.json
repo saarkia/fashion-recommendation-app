@@ -1,0 +1,820 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-05-29T00:00:00.000Z",
+  "updatedBy": "default",
+  "fields": {
+    "hero.eyebrow": {
+      "selector": ".brief-hero > div:first-child > .eyebrow",
+      "value": "RetailNext x OpenAI"
+    },
+    "hero.title": {
+      "selector": "#briefHeroTitle",
+      "value": "OpenAI-powered event shopping assistant for RetailNext."
+    },
+    "hero.body": {
+      "selector": ".brief-hero > div:first-child > p:not(.eyebrow)",
+      "value": "A natural language assistant that helps shoppers describe what they need, checks real inventory, and carries the journey into web, app, WhatsApp, associate, and email follow-up channels."
+    },
+    "hero.startLabel": {
+      "selector": "#startBrief strong",
+      "value": "Start briefing"
+    },
+    "hero.openLiveStylist": {
+      "selector": ".brief-secondary",
+      "value": "Open live stylist"
+    },
+    "rail.eyebrow": {
+      "selector": ".brief-rail > .eyebrow",
+      "value": "Executive narrative"
+    },
+    "nav.situation": {
+      "selector": ".brief-nav-button[data-target=\"situation\"]",
+      "value": "01 What we heard"
+    },
+    "nav.searchGap": {
+      "selector": ".brief-nav-button[data-target=\"search-gap\"]",
+      "value": "02 Engagement gap"
+    },
+    "nav.solution": {
+      "selector": ".brief-nav-button[data-target=\"solution\"]",
+      "value": "03 Assistant approach"
+    },
+    "nav.demoBridge": {
+      "selector": ".brief-nav-button[data-target=\"demo-bridge\"]",
+      "value": "04 Channels"
+    },
+    "nav.sequence": {
+      "selector": ".brief-nav-button[data-target=\"sequence\"]",
+      "value": "05 Generate flow"
+    },
+    "nav.architecture": {
+      "selector": ".brief-nav-button[data-target=\"architecture\"]",
+      "value": "06 Architecture"
+    },
+    "nav.platform": {
+      "selector": ".brief-nav-button[data-target=\"platform\"]",
+      "value": "07 Why OpenAI"
+    },
+    "nav.value": {
+      "selector": ".brief-nav-button[data-target=\"value\"]",
+      "value": "08 Outcomes"
+    },
+    "nav.rollout": {
+      "selector": ".brief-nav-button[data-target=\"rollout\"]",
+      "value": "09 Rollout"
+    },
+    "hero.proof.0.title": {
+      "selector": ".brief-proof-strip > div:nth-child(1) strong",
+      "value": "Chat-first"
+    },
+    "hero.proof.0.body": {
+      "selector": ".brief-proof-strip > div:nth-child(1) span",
+      "value": "customers ask in natural language or share a photo"
+    },
+    "hero.proof.1.title": {
+      "selector": ".brief-proof-strip > div:nth-child(2) strong",
+      "value": "Stock aware"
+    },
+    "hero.proof.1.body": {
+      "selector": ".brief-proof-strip > div:nth-child(2) span",
+      "value": "SKU, store, size, and price checked before display"
+    },
+    "hero.proof.2.title": {
+      "selector": ".brief-proof-strip > div:nth-child(3) strong",
+      "value": "Channel ready"
+    },
+    "hero.proof.2.body": {
+      "selector": ".brief-proof-strip > div:nth-child(3) span",
+      "value": "same assistant pattern across site, app, WhatsApp, store, and email follow-up"
+    },
+    "situation.impact.0.title": {
+      "selector": "#situation .impact-strip > div:nth-child(1) strong",
+      "value": "Lost conversion"
+    },
+    "situation.impact.0.body": {
+      "selector": "#situation .impact-strip > div:nth-child(1) span",
+      "value": "high-intent shoppers abandon when availability confidence is low"
+    },
+    "situation.impact.1.title": {
+      "selector": "#situation .impact-strip > div:nth-child(2) strong",
+      "value": "Manual lookup"
+    },
+    "situation.impact.1.body": {
+      "selector": "#situation .impact-strip > div:nth-child(2) span",
+      "value": "associates bridge style, stock, substitutes, and customer messaging"
+    },
+    "situation.impact.2.title": {
+      "selector": "#situation .impact-strip > div:nth-child(3) strong",
+      "value": "Brand trust"
+    },
+    "situation.impact.2.body": {
+      "selector": "#situation .impact-strip > div:nth-child(3) span",
+      "value": "poor reviews compound when store discovery falls short of the digital promise"
+    },
+    "demoBridge.strip.0.title": {
+      "selector": "#demo-bridge .channel-strip > div:nth-child(1) strong",
+      "value": "Lost conversion"
+    },
+    "demoBridge.strip.0.body": {
+      "selector": "#demo-bridge .channel-strip > div:nth-child(1) span",
+      "value": "high-intent shoppers abandon when availability confidence is low"
+    },
+    "demoBridge.strip.1.title": {
+      "selector": "#demo-bridge .channel-strip > div:nth-child(2) strong",
+      "value": "Manual lookup"
+    },
+    "demoBridge.strip.1.body": {
+      "selector": "#demo-bridge .channel-strip > div:nth-child(2) span",
+      "value": "associates bridge style, stock, substitutes, and customer messaging"
+    },
+    "demoBridge.strip.2.title": {
+      "selector": "#demo-bridge .channel-strip > div:nth-child(3) strong",
+      "value": "Brand trust"
+    },
+    "demoBridge.strip.2.body": {
+      "selector": "#demo-bridge .channel-strip > div:nth-child(3) span",
+      "value": "poor reviews compound when store discovery falls short of the digital promise"
+    },
+    "solution.mission.0.title": {
+      "selector": "#solution .mission-board > div:nth-child(1) strong",
+      "value": "Lost conversion"
+    },
+    "solution.mission.0.body": {
+      "selector": "#solution .mission-board > div:nth-child(1) span",
+      "value": "high-intent shoppers abandon when availability confidence is low"
+    },
+    "solution.mission.1.title": {
+      "selector": "#solution .mission-board > div:nth-child(2) strong",
+      "value": "Manual lookup"
+    },
+    "solution.mission.1.body": {
+      "selector": "#solution .mission-board > div:nth-child(2) span",
+      "value": "associates bridge style, stock, substitutes, and customer messaging"
+    },
+    "solution.mission.2.title": {
+      "selector": "#solution .mission-board > div:nth-child(3) strong",
+      "value": "Brand trust"
+    },
+    "solution.mission.2.body": {
+      "selector": "#solution .mission-board > div:nth-child(3) span",
+      "value": "poor reviews compound when store discovery falls short of the digital promise"
+    },
+    "solution.mission.3.title": {
+      "selector": "#solution .mission-board > div:nth-child(4) strong",
+      "value": "Understand"
+    },
+    "solution.mission.3.body": {
+      "selector": "#solution .mission-board > div:nth-child(4) span",
+      "value": "Text, image, occasion, style, budget, store"
+    },
+    "solution.mission.4.title": {
+      "selector": "#solution .mission-board > div:nth-child(5) strong",
+      "value": "Retrieve"
+    },
+    "solution.mission.4.body": {
+      "selector": "#solution .mission-board > div:nth-child(5) span",
+      "value": "Semantic catalogue matches"
+    },
+    "situation.eyebrow": {
+      "selector": "#situation .brief-section-copy .eyebrow",
+      "value": "01 What we heard"
+    },
+    "situation.heading": {
+      "selector": "#situation .brief-section-copy h2",
+      "value": "Event shoppers struggle to find or confirm the right items quickly."
+    },
+    "situation.body": {
+      "selector": "#situation .brief-section-copy > p:not(.eyebrow)",
+      "value": "Reviews point to the same issue: discovery, availability, and store confidence are split across the journey."
+    },
+    "searchGap.eyebrow": {
+      "selector": "#search-gap .brief-section-copy .eyebrow",
+      "value": "02 Engagement gap"
+    },
+    "searchGap.heading": {
+      "selector": "#search-gap .brief-section-copy h2",
+      "value": "The interface matters: chat captures more of the buying mission."
+    },
+    "searchGap.body": {
+      "selector": "#search-gap .brief-section-copy > p:not(.eyebrow)",
+      "value": "Customers are more likely to engage when they can explain the occasion in their own words."
+    },
+    "solution.eyebrow": {
+      "selector": "#solution .brief-section-copy .eyebrow",
+      "value": "03 Assistant approach"
+    },
+    "solution.heading": {
+      "selector": "#solution .brief-section-copy h2",
+      "value": "An inventory-grounded AI assistant for event shopping."
+    },
+    "solution.body": {
+      "selector": "#solution .brief-section-copy > p:not(.eyebrow)",
+      "value": "OpenAI interprets text, images, and follow-up chat. RetailNext verifies products, stock, price, and fulfilment."
+    },
+    "demoBridge.eyebrow": {
+      "selector": "#demo-bridge .brief-section-copy .eyebrow",
+      "value": "04 Channels"
+    },
+    "demoBridge.heading": {
+      "selector": "#demo-bridge .brief-section-copy h2",
+      "value": "The chatbot pattern can sit wherever customers already shop."
+    },
+    "demoBridge.body": {
+      "selector": "#demo-bridge .brief-section-copy > p:not(.eyebrow)",
+      "value": "One assistant workflow can serve the website, mobile app, WhatsApp, associates, and lifecycle messaging."
+    },
+    "sequence.eyebrow": {
+      "selector": "#sequence .brief-section-copy .eyebrow",
+      "value": "05 Generate flow"
+    },
+    "sequence.heading": {
+      "selector": "#sequence .brief-section-copy h2",
+      "value": "Generate outfit: propose, verify, display."
+    },
+    "sequence.body": {
+      "selector": "#sequence .brief-section-copy > p:not(.eyebrow)",
+      "value": "The boundary is simple: OpenAI interprets and explains; RetailNext validates what can be shown and sold."
+    },
+    "architecture.eyebrow": {
+      "selector": "#architecture .brief-section-copy .eyebrow",
+      "value": "06 Architecture"
+    },
+    "architecture.heading": {
+      "selector": "#architecture .brief-section-copy h2",
+      "value": "Flexible conversation, controlled retail decisions."
+    },
+    "architecture.body": {
+      "selector": "#architecture .brief-section-copy > p:not(.eyebrow)",
+      "value": "Click through the flow to show the OpenAI and RetailNext boundary."
+    },
+    "platform.eyebrow": {
+      "selector": "#platform .brief-section-copy .eyebrow",
+      "value": "07 Why OpenAI"
+    },
+    "platform.heading": {
+      "selector": "#platform .brief-section-copy h2",
+      "value": "OpenAI is the platform layer for the assistant loop."
+    },
+    "platform.body": {
+      "selector": "#platform .brief-section-copy > p:not(.eyebrow)",
+      "value": "Multimodal understanding, structured outputs, embeddings, model choice, tool actions, and evals work together in one pattern."
+    },
+    "value.eyebrow": {
+      "selector": "#value .brief-section-copy .eyebrow",
+      "value": "08 Business outcomes"
+    },
+    "value.heading": {
+      "selector": "#value .brief-section-copy h2",
+      "value": "Business value map for RetailNext."
+    },
+    "value.body": {
+      "selector": "#value .brief-section-copy > p:not(.eyebrow)",
+      "value": "Use the value toggle to connect OpenAI capabilities to measurable retail outcomes."
+    },
+    "rollout.eyebrow": {
+      "selector": "#rollout .brief-section-copy .eyebrow",
+      "value": "09 Rollout"
+    },
+    "rollout.heading": {
+      "selector": "#rollout .brief-section-copy h2",
+      "value": "Crawl, walk, run."
+    },
+    "rollout.body": {
+      "selector": "#rollout .brief-section-copy > p:not(.eyebrow)",
+      "value": "Prove engagement first, then integrate operations and expand channels."
+    },
+    "situation.problems.0.label": {
+      "selector": "#situation .problem-grid article:nth-of-type(1) span",
+      "value": "Customer"
+    },
+    "situation.problems.0.title": {
+      "selector": "#situation .problem-grid article:nth-of-type(1) h3",
+      "value": "Occasion-led demand"
+    },
+    "situation.problems.0.body": {
+      "selector": "#situation .problem-grid article:nth-of-type(1) p",
+      "value": "\"I need something for a winter wedding\" is a better brief than \"black dress\"."
+    },
+    "situation.problems.1.label": {
+      "selector": "#situation .problem-grid article:nth-of-type(2) span",
+      "value": "Store"
+    },
+    "situation.problems.1.title": {
+      "selector": "#situation .problem-grid article:nth-of-type(2) h3",
+      "value": "Availability uncertainty"
+    },
+    "situation.problems.1.body": {
+      "selector": "#situation .problem-grid article:nth-of-type(2) p",
+      "value": "Customers and associates still need to confirm store, size, substitutes, and timing."
+    },
+    "situation.problems.2.label": {
+      "selector": "#situation .problem-grid article:nth-of-type(3) span",
+      "value": "Business"
+    },
+    "situation.problems.2.title": {
+      "selector": "#situation .problem-grid article:nth-of-type(3) h3",
+      "value": "High-intent friction"
+    },
+    "situation.problems.2.body": {
+      "selector": "#situation .problem-grid article:nth-of-type(3) p",
+      "value": "Event shoppers have urgency, higher basket potential, and lower tolerance for failed searches."
+    },
+    "solution.roleCards.0.label": {
+      "selector": "#solution .brief-grid.two article:nth-of-type(1) span",
+      "value": "OpenAI role"
+    },
+    "solution.roleCards.0.title": {
+      "selector": "#solution .brief-grid.two article:nth-of-type(1) h3",
+      "value": "Understand and converse"
+    },
+    "solution.roleCards.0.body": {
+      "selector": "#solution .brief-grid.two article:nth-of-type(1) p",
+      "value": "Intent extraction, image understanding, semantic retrieval inputs, action selection, explanations, and review."
+    },
+    "solution.roleCards.1.label": {
+      "selector": "#solution .brief-grid.two article:nth-of-type(2) span",
+      "value": "RetailNext role"
+    },
+    "solution.roleCards.1.title": {
+      "selector": "#solution .brief-grid.two article:nth-of-type(2) h3",
+      "value": "Control retail decisions"
+    },
+    "solution.roleCards.1.body": {
+      "selector": "#solution .brief-grid.two article:nth-of-type(2) p",
+      "value": "Catalogue SKUs, price, stock, store rules, basket changes, fulfilment, and email delivery."
+    },
+    "sequence.steps.0.label": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(1) span",
+      "value": "1"
+    },
+    "sequence.steps.0.title": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(1) h3",
+      "value": "Capture brief"
+    },
+    "sequence.steps.0.body": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(1) p",
+      "value": "Occasion, image, store, budget, style, urgency."
+    },
+    "sequence.steps.0.code": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(1) code",
+      "value": "public/app.js → requestRecommendations()"
+    },
+    "sequence.steps.1.label": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(2) span",
+      "value": "2"
+    },
+    "sequence.steps.1.title": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(2) h3",
+      "value": "Resolve constraints"
+    },
+    "sequence.steps.1.body": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(2) p",
+      "value": "Store, size, budget, timing, starter-product context."
+    },
+    "sequence.steps.1.code": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(2) code",
+      "value": "POST /api/recommend"
+    },
+    "sequence.steps.2.label": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(3) span",
+      "value": "3"
+    },
+    "sequence.steps.2.title": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(3) h3",
+      "value": "Structure intent"
+    },
+    "sequence.steps.2.body": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(3) p",
+      "value": "GPT-4o mini returns attributes, outfit roles, and search phrases."
+    },
+    "sequence.steps.2.code": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(3) code",
+      "value": "analyzeReferenceWithOpenAI()"
+    },
+    "sequence.steps.3.label": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(4) span",
+      "value": "4"
+    },
+    "sequence.steps.3.title": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(4) h3",
+      "value": "Retrieve SKUs"
+    },
+    "sequence.steps.3.body": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(4) p",
+      "value": "Embeddings match the event brief to catalogue vectors."
+    },
+    "sequence.steps.3.code": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(4) code",
+      "value": "text-embedding-3-large + cosine search"
+    },
+    "sequence.steps.4.label": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(5) span",
+      "value": "5"
+    },
+    "sequence.steps.4.title": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(5) h3",
+      "value": "Apply retail rules"
+    },
+    "sequence.steps.4.body": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(5) p",
+      "value": "Stock, budget, urgency, outfit role, colour, event fit."
+    },
+    "sequence.steps.4.code": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(5) code",
+      "value": "candidateScore() + guardrail()"
+    },
+    "sequence.steps.5.label": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(6) span",
+      "value": "6"
+    },
+    "sequence.steps.5.title": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(6) h3",
+      "value": "Explain and review"
+    },
+    "sequence.steps.5.body": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(6) p",
+      "value": "OpenAI writes rationale and reviews the actual basket."
+    },
+    "sequence.steps.5.code": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(6) code",
+      "value": "generateBusinessCopy() + reviewOutfitWithOpenAI()"
+    },
+    "sequence.steps.6.label": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(7) span",
+      "value": "7"
+    },
+    "sequence.steps.6.title": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(7) h3",
+      "value": "Display result"
+    },
+    "sequence.steps.6.body": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(7) p",
+      "value": "Products, availability, rationale, chat, add-to-basket."
+    },
+    "sequence.steps.6.code": {
+      "selector": "#sequence .generate-sequence article:nth-of-type(7) code",
+      "value": "renderResult()"
+    },
+    "value.metrics.1.label": {
+      "selector": "#value .brief-grid.four article:nth-of-type(2) span",
+      "value": "Experience"
+    },
+    "value.metrics.1.title": {
+      "selector": "#value .brief-grid.four article:nth-of-type(2) strong",
+      "value": "Better engagement"
+    },
+    "value.metrics.1.body": {
+      "selector": "#value .brief-grid.four article:nth-of-type(2) p",
+      "value": "Natural language lowers the effort to start."
+    },
+    "value.metrics.2.label": {
+      "selector": "#value .brief-grid.four article:nth-of-type(3) span",
+      "value": "Revenue"
+    },
+    "value.metrics.2.title": {
+      "selector": "#value .brief-grid.four article:nth-of-type(3) strong",
+      "value": "Stronger event conversion"
+    },
+    "value.metrics.2.body": {
+      "selector": "#value .brief-grid.four article:nth-of-type(3) p",
+      "value": "Complete outfits increase basket confidence."
+    },
+    "value.metrics.3.label": {
+      "selector": "#value .brief-grid.four article:nth-of-type(4) span",
+      "value": "Operations"
+    },
+    "value.metrics.3.title": {
+      "selector": "#value .brief-grid.four article:nth-of-type(4) strong",
+      "value": "Less manual lookup"
+    },
+    "value.metrics.3.body": {
+      "selector": "#value .brief-grid.four article:nth-of-type(4) p",
+      "value": "Associates get item rationale and backup options."
+    },
+    "rollout.timeline.0.label": {
+      "selector": "#rollout .rollout-timeline article:nth-of-type(1) span",
+      "value": "0-8 weeks"
+    },
+    "rollout.timeline.0.title": {
+      "selector": "#rollout .rollout-timeline article:nth-of-type(1) h3",
+      "value": "Crawl"
+    },
+    "rollout.timeline.0.body": {
+      "selector": "#rollout .rollout-timeline article:nth-of-type(1) p",
+      "value": "Text assistant, limited categories, selected stores, static inventory snapshot."
+    },
+    "rollout.timeline.1.label": {
+      "selector": "#rollout .rollout-timeline article:nth-of-type(2) span",
+      "value": "2-4 months"
+    },
+    "rollout.timeline.1.title": {
+      "selector": "#rollout .rollout-timeline article:nth-of-type(2) h3",
+      "value": "Walk"
+    },
+    "rollout.timeline.1.body": {
+      "selector": "#rollout .rollout-timeline article:nth-of-type(2) p",
+      "value": "Photo input, real-time inventory, guardrail tuning, WhatsApp pilot."
+    },
+    "rollout.timeline.2.label": {
+      "selector": "#rollout .rollout-timeline article:nth-of-type(3) span",
+      "value": "Scale"
+    },
+    "rollout.timeline.2.title": {
+      "selector": "#rollout .rollout-timeline article:nth-of-type(3) h3",
+      "value": "Run"
+    },
+    "rollout.timeline.2.body": {
+      "selector": "#rollout .rollout-timeline article:nth-of-type(3) p",
+      "value": "Associate assistant, email recovery, personalisation, continuous eval loop."
+    },
+    "searchGap.core.eyebrow": {
+      "selector": "#search-gap .source-note-card .eyebrow",
+      "value": "Core point"
+    },
+    "searchGap.core.body": {
+      "selector": "#search-gap .source-note-card p:last-child",
+      "value": "OpenAI gives RetailNext a conversational front door for product discovery and a structured bridge into retail systems."
+    },
+    "value.scorecard.eyebrow": {
+      "selector": "#value .source-note-card .eyebrow",
+      "value": "Pilot scorecard"
+    },
+    "value.scorecard.body": {
+      "selector": "#value .source-note-card p:last-child",
+      "value": "Measure product engagement, add-to-basket, availability-related complaints, associate lookup time, and recovery engagement."
+    },
+    "sequence.boundary.title": {
+      "selector": "#sequence .sequence-output strong",
+      "value": "Important boundary"
+    },
+    "sequence.boundary.body": {
+      "selector": "#sequence .sequence-output p",
+      "value": "OpenAI never becomes the source of product truth. RetailNext owns catalogue data, price, stock, basket state, and fulfilment rules."
+    },
+    "rollout.closing.eyebrow": {
+      "selector": "#rollout .closing-statement .eyebrow",
+      "value": "Closing line"
+    },
+    "rollout.closing.body": {
+      "selector": "#rollout .closing-statement p:last-child",
+      "value": "\"Start with the customer conversation, ground it in RetailNext inventory, and measure the commercial journey end to end.\""
+    },
+    "architecture.boundary.0.eyebrow": {
+      "selector": "#architecture .system-boundary > div:nth-child(1) .eyebrow",
+      "value": "OpenAI API powered"
+    },
+    "architecture.boundary.0.item.0": {
+      "selector": "#architecture .system-boundary > div:nth-child(1) li:nth-child(1)",
+      "value": "Text and image understanding"
+    },
+    "architecture.boundary.0.item.1": {
+      "selector": "#architecture .system-boundary > div:nth-child(1) li:nth-child(2)",
+      "value": "Structured JSON shopping briefs"
+    },
+    "architecture.boundary.0.item.2": {
+      "selector": "#architecture .system-boundary > div:nth-child(1) li:nth-child(3)",
+      "value": "Embeddings for semantic retrieval"
+    },
+    "architecture.boundary.0.item.3": {
+      "selector": "#architecture .system-boundary > div:nth-child(1) li:nth-child(4)",
+      "value": "Tool patterns for chat actions"
+    },
+    "architecture.boundary.0.item.4": {
+      "selector": "#architecture .system-boundary > div:nth-child(1) li:nth-child(5)",
+      "value": "Grounded generation for shopper and associate copy"
+    },
+    "architecture.boundary.1.eyebrow": {
+      "selector": "#architecture .system-boundary > div:nth-child(2) .eyebrow",
+      "value": "RetailNext owned"
+    },
+    "architecture.boundary.1.item.0": {
+      "selector": "#architecture .system-boundary > div:nth-child(2) li:nth-child(1)",
+      "value": "Customer surfaces and basket state"
+    },
+    "architecture.boundary.1.item.1": {
+      "selector": "#architecture .system-boundary > div:nth-child(2) li:nth-child(2)",
+      "value": "Catalogue, product images, prices, and inventory"
+    },
+    "architecture.boundary.1.item.2": {
+      "selector": "#architecture .system-boundary > div:nth-child(2) li:nth-child(3)",
+      "value": "Budget, availability, substitutes, and fulfilment rules"
+    },
+    "architecture.boundary.1.item.3": {
+      "selector": "#architecture .system-boundary > div:nth-child(2) li:nth-child(4)",
+      "value": "Preview/apply safety for basket changes"
+    },
+    "architecture.boundary.1.item.4": {
+      "selector": "#architecture .system-boundary > div:nth-child(2) li:nth-child(5)",
+      "value": "Business KPIs, channel deployment, and email handoff"
+    },
+    "platform.modelLadder.0.label": {
+      "selector": ".model-ladder > div:nth-child(1) span",
+      "value": "Intent"
+    },
+    "platform.modelLadder.0.title": {
+      "selector": ".model-ladder > div:nth-child(1) strong",
+      "value": "GPT-4o mini"
+    },
+    "platform.modelLadder.0.body": {
+      "selector": ".model-ladder > div:nth-child(1) em",
+      "value": "text, image, shopping brief"
+    },
+    "platform.modelLadder.1.label": {
+      "selector": ".model-ladder > div:nth-child(2) span",
+      "value": "Retrieval"
+    },
+    "platform.modelLadder.1.title": {
+      "selector": ".model-ladder > div:nth-child(2) strong",
+      "value": "text-embedding-3-large"
+    },
+    "platform.modelLadder.1.body": {
+      "selector": ".model-ladder > div:nth-child(2) em",
+      "value": "semantic catalogue search"
+    },
+    "platform.modelLadder.2.label": {
+      "selector": ".model-ladder > div:nth-child(3) span",
+      "value": "Reasoning"
+    },
+    "platform.modelLadder.2.title": {
+      "selector": ".model-ladder > div:nth-child(3) strong",
+      "value": "GPT-4.1"
+    },
+    "platform.modelLadder.2.body": {
+      "selector": ".model-ladder > div:nth-child(3) em",
+      "value": "review, rationale, copy"
+    },
+    "platform.modelLadder.3.label": {
+      "selector": ".model-ladder > div:nth-child(4) span",
+      "value": "Governance"
+    },
+    "platform.modelLadder.3.title": {
+      "selector": ".model-ladder > div:nth-child(4) strong",
+      "value": "Evals + guardrails"
+    },
+    "platform.modelLadder.3.body": {
+      "selector": ".model-ladder > div:nth-child(4) em",
+      "value": "quality, latency, cost, risk"
+    }
+  },
+  "interactiveContent": {
+    "query": {
+      "keyword": {
+        "label": "Keyword search",
+        "title": "Black dress",
+        "input": "black dress",
+        "output": "Product matches, then manual checks for event fit, size, store, and substitutes.",
+        "value": "Useful for known-item search, weaker for event-led discovery."
+      },
+      "chat": {
+        "label": "Natural language chat",
+        "title": "Smart outfit for a winter wedding in New York",
+        "input": "I need a smart outfit for a winter wedding in New York, available near me today.",
+        "output": "OpenAI extracts occasion, formality, weather, urgency, budget, store, and outfit roles.",
+        "value": "Customers can describe the mission naturally, which makes the assistant easier to engage with."
+      },
+      "photo": {
+        "label": "Photo + chat",
+        "title": "Build around this jacket",
+        "input": "I like this jacket. Can you build an outfit for a work dinner?",
+        "output": "Vision identifies style cues, then the assistant retrieves compatible products and checks availability.",
+        "value": "A customer can start from inspiration, not taxonomy."
+      },
+      "whatsapp": {
+        "label": "WhatsApp prompt",
+        "title": "Same assistant, lower-friction channel",
+        "input": "Need an outfit for a wedding tomorrow. Can I collect it at Oxford Street?",
+        "output": "The same structured assistant flow can respond in a messaging channel and hand off to store or email follow-up.",
+        "value": "RetailNext can meet customers where they already communicate."
+      }
+    },
+    "channel": {
+      "web": {
+        "title": "Website and app",
+        "job": "Make product discovery conversational without replacing the existing commerce journey.",
+        "enabler": "OpenAI maps natural language and images into structured search and action requests.",
+        "outcome": "Higher engagement, clearer baskets, and a route into checkout."
+      },
+      "whatsapp": {
+        "title": "WhatsApp",
+        "job": "Support urgent event shopping in a channel customers already use.",
+        "enabler": "The same intent extraction and action schema can sit behind a messaging experience.",
+        "outcome": "Lower-friction re-engagement, store collection prompts, and recovery journeys."
+      },
+      "associate": {
+        "title": "Associate tool",
+        "job": "Give store teams the outfit rationale, stock risks, and substitute options.",
+        "enabler": "Grounded generation summarises verified product and inventory facts.",
+        "outcome": "Less manual lookup and a better handoff from digital to store."
+      },
+      "email": {
+        "title": "Email follow-up",
+        "job": "Turn the session into a timely lifecycle message.",
+        "enabler": "Structured outputs provide product, event, stock, and copy fields for email payloads.",
+        "outcome": "Abandoned missions can support personalised follow-up and recovery."
+      }
+    },
+    "architecture": {
+      "intent": {
+        "title": "Mission capture",
+        "primitive": "RetailNext frontend",
+        "body": "A shopper starts from chat, product, or image, then adds occasion, store, budget, and urgency.",
+        "value": "The assistant captures a richer brief than a keyword box."
+      },
+      "understand": {
+        "title": "Intent understanding",
+        "primitive": "OpenAI API: Vision + Structured Outputs",
+        "body": "OpenAI extracts item type, colour, formality, constraints, and outfit roles.",
+        "value": "Text and images become structured fields the app can validate."
+      },
+      "retrieve": {
+        "title": "Semantic retrieval",
+        "primitive": "OpenAI API + RetailNext catalogue",
+        "body": "Embeddings match the shopping brief to catalogue vectors.",
+        "value": "RetailNext can retrieve by meaning, not only by exact product terms."
+      },
+      "ground": {
+        "title": "Retail validation",
+        "primitive": "RetailNext deterministic logic",
+        "body": "RetailNext applies stock, price, size, budget, urgency, and fulfilment rules.",
+        "value": "Only validated products reach the customer."
+      },
+      "activate": {
+        "title": "Actions and handoff",
+        "primitive": "OpenAI generation + RetailNext actions",
+        "body": "The assistant explains, swaps, emails, briefs associates, and flags demand gaps.",
+        "value": "One conversation becomes checkout support, store handoff, and email follow-up."
+      }
+    },
+    "platform": {
+      "vision": {
+        "title": "Multimodal understanding",
+        "headline": "Production-quality text and image reasoning.",
+        "use": "Reads occasion prompts and starter-item photos.",
+        "value": "Customers can begin with natural language, a product, or inspiration."
+      },
+      "structured": {
+        "title": "Structured Outputs",
+        "headline": "Reliable API contracts for retail systems.",
+        "use": "Returns strict fields for occasion, outfit slots, budget, urgency, store, and constraints.",
+        "value": "RetailNext can validate, log, test, and route model output."
+      },
+      "embeddings": {
+        "title": "Embeddings",
+        "headline": "Semantic retrieval over a large catalogue.",
+        "use": "Matches the event brief to products by meaning.",
+        "value": "Improves discovery when the customer uses everyday language."
+      },
+      "ladder": {
+        "title": "Model ladder",
+        "headline": "Right model for each task.",
+        "use": "Fast model for intent, embeddings for retrieval, stronger model for review and copy.",
+        "value": "Balances quality, latency, and cost as traffic scales."
+      },
+      "tools": {
+        "title": "Tool actions",
+        "headline": "Chat requests become controlled operations.",
+        "use": "Mira maps 'swap the shoes' or 'email this outfit' to previewed actions.",
+        "value": "Conversation can move the journey forward without bypassing app checks."
+      },
+      "evals": {
+        "title": "Evals",
+        "headline": "Quality checks before scale.",
+        "use": "Test event fit, availability truth, substitutions, latency, cost, and refusal paths.",
+        "value": "RetailNext gets a route from demo to governed production."
+      },
+      "enterprise": {
+        "title": "Enterprise controls",
+        "headline": "Data and system control remain with RetailNext.",
+        "use": "OpenAI supports interpretation and language; RetailNext owns product truth and actions.",
+        "value": "The model helps the journey without owning commercial decisions."
+      }
+    },
+    "value": {
+      "conversion": {
+        "title": "Increase high-intent event conversion",
+        "goal": "Move shoppers from vague occasion to available basket.",
+        "enabler": "Multimodal intent understanding + semantic retrieval.",
+        "metric": "Product click-through, add-to-cart, revenue per event visit."
+      },
+      "friction": {
+        "title": "Reduce availability-driven friction",
+        "goal": "Stop showing attractive options that fail at store or size level.",
+        "enabler": "Inventory-grounded filtering + validated substitutes.",
+        "metric": "Availability-related complaints, failed searches, collection confidence."
+      },
+      "efficiency": {
+        "title": "Improve store-level efficiency",
+        "goal": "Give associates context before the customer arrives.",
+        "enabler": "Generated handoff notes grounded in verified products.",
+        "metric": "Associate lookup time, substitute acceptance, in-store conversion."
+      },
+      "learning": {
+        "title": "Create a demand learning loop",
+        "goal": "Capture unmet event intent and stock gaps.",
+        "enabler": "Structured outputs + email and reporting payloads.",
+        "metric": "Missed-demand themes, replenishment signals, recovery engagement."
+      }
+    }
+  },
+  "sections": {}
+}

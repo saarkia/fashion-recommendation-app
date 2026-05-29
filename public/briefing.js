@@ -1,165 +1,13 @@
-const queryContent = {
-  keyword: {
-    label: "Keyword search",
-    title: "Black dress",
-    input: "black dress",
-    output: "Product matches, then manual checks for event fit, size, store, and substitutes.",
-    value: "Useful for known-item search, weaker for event-led discovery."
-  },
-  chat: {
-    label: "Natural language chat",
-    title: "Smart outfit for a winter wedding in New York",
-    input: "I need a smart outfit for a winter wedding in New York, available near me today.",
-    output: "OpenAI extracts occasion, formality, weather, urgency, budget, store, and outfit roles.",
-    value: "Customers can describe the mission naturally, which makes the assistant easier to engage with."
-  },
-  photo: {
-    label: "Photo + chat",
-    title: "Build around this jacket",
-    input: "I like this jacket. Can you build an outfit for a work dinner?",
-    output: "Vision identifies style cues, then the assistant retrieves compatible products and checks availability.",
-    value: "A customer can start from inspiration, not taxonomy."
-  },
-  whatsapp: {
-    label: "WhatsApp prompt",
-    title: "Same assistant, lower-friction channel",
-    input: "Need an outfit for a wedding tomorrow. Can I collect it at Oxford Street?",
-    output: "The same structured assistant flow can respond in a messaging channel and hand off to store or email follow-up.",
-    value: "RetailNext can meet customers where they already communicate."
-  }
-};
-
-const channelContent = {
-  web: {
-    title: "Website and app",
-    job: "Make product discovery conversational without replacing the existing commerce journey.",
-    enabler: "OpenAI maps natural language and images into structured search and action requests.",
-    outcome: "Higher engagement, clearer baskets, and a route into checkout."
-  },
-  whatsapp: {
-    title: "WhatsApp",
-    job: "Support urgent event shopping in a channel customers already use.",
-    enabler: "The same intent extraction and action schema can sit behind a messaging experience.",
-    outcome: "Lower-friction re-engagement, store collection prompts, and recovery journeys."
-  },
-  associate: {
-    title: "Associate tool",
-    job: "Give store teams the outfit rationale, stock risks, and substitute options.",
-    enabler: "Grounded generation summarises verified product and inventory facts.",
-    outcome: "Less manual lookup and a better handoff from digital to store."
-  },
-  email: {
-    title: "Email follow-up",
-    job: "Turn the session into a timely lifecycle message.",
-    enabler: "Structured outputs provide product, event, stock, and copy fields for email payloads.",
-    outcome: "Abandoned missions can support personalised follow-up and recovery."
-  }
-};
-
-const architectureContent = {
-  intent: {
-    title: "Mission capture",
-    primitive: "RetailNext frontend",
-    body: "A shopper starts from chat, product, or image, then adds occasion, store, budget, and urgency.",
-    value: "The assistant captures a richer brief than a keyword box."
-  },
-  understand: {
-    title: "Intent understanding",
-    primitive: "OpenAI API: Vision + Structured Outputs",
-    body: "OpenAI extracts item type, colour, formality, constraints, and outfit roles.",
-    value: "Text and images become structured fields the app can validate."
-  },
-  retrieve: {
-    title: "Semantic retrieval",
-    primitive: "OpenAI API + RetailNext catalogue",
-    body: "Embeddings match the shopping brief to catalogue vectors.",
-    value: "RetailNext can retrieve by meaning, not only by exact product terms."
-  },
-  ground: {
-    title: "Retail validation",
-    primitive: "RetailNext deterministic logic",
-    body: "RetailNext applies stock, price, size, budget, urgency, and fulfilment rules.",
-    value: "Only validated products reach the customer."
-  },
-  activate: {
-    title: "Actions and handoff",
-    primitive: "OpenAI generation + RetailNext actions",
-    body: "The assistant explains, swaps, emails, briefs associates, and flags demand gaps.",
-    value: "One conversation becomes checkout support, store handoff, and email follow-up."
-  }
-};
-
-const platformContent = {
-  vision: {
-    title: "Multimodal understanding",
-    headline: "Production-quality text and image reasoning.",
-    use: "Reads occasion prompts and starter-item photos.",
-    value: "Customers can begin with natural language, a product, or inspiration."
-  },
-  structured: {
-    title: "Structured Outputs",
-    headline: "Reliable API contracts for retail systems.",
-    use: "Returns strict fields for occasion, outfit slots, budget, urgency, store, and constraints.",
-    value: "RetailNext can validate, log, test, and route model output."
-  },
-  embeddings: {
-    title: "Embeddings",
-    headline: "Semantic retrieval over a large catalogue.",
-    use: "Matches the event brief to products by meaning.",
-    value: "Improves discovery when the customer uses everyday language."
-  },
-  ladder: {
-    title: "Model ladder",
-    headline: "Right model for each task.",
-    use: "Fast model for intent, embeddings for retrieval, stronger model for review and copy.",
-    value: "Balances quality, latency, and cost as traffic scales."
-  },
-  tools: {
-    title: "Tool actions",
-    headline: "Chat requests become controlled operations.",
-    use: "Mira maps 'swap the shoes' or 'email this outfit' to previewed actions.",
-    value: "Conversation can move the journey forward without bypassing app checks."
-  },
-  evals: {
-    title: "Evals",
-    headline: "Quality checks before scale.",
-    use: "Test event fit, availability truth, substitutions, latency, cost, and refusal paths.",
-    value: "RetailNext gets a route from demo to governed production."
-  },
-  enterprise: {
-    title: "Enterprise controls",
-    headline: "Data and system control remain with RetailNext.",
-    use: "OpenAI supports interpretation and language; RetailNext owns product truth and actions.",
-    value: "The model helps the journey without owning commercial decisions."
-  }
-};
-
-const valueContent = {
-  conversion: {
-    title: "Increase high-intent event conversion",
-    goal: "Move shoppers from vague occasion to available basket.",
-    enabler: "Multimodal intent understanding + semantic retrieval.",
-    metric: "Product click-through, add-to-cart, revenue per event visit."
-  },
-  friction: {
-    title: "Reduce availability-driven friction",
-    goal: "Stop showing attractive options that fail at store or size level.",
-    enabler: "Inventory-grounded filtering + validated substitutes.",
-    metric: "Availability-related complaints, failed searches, collection confidence."
-  },
-  efficiency: {
-    title: "Improve store-level efficiency",
-    goal: "Give associates context before the customer arrives.",
-    enabler: "Generated handoff notes grounded in verified products.",
-    metric: "Associate lookup time, substitute acceptance, in-store conversion."
-  },
-  learning: {
-    title: "Create a demand learning loop",
-    goal: "Capture unmet event intent and stock gaps.",
-    enabler: "Structured outputs + email and reporting payloads.",
-    metric: "Missed-demand themes, replenishment signals, recovery engagement."
-  }
-};
+let briefingContent = null;
+let briefingPin = sessionStorage.getItem("briefingEditPin") || "";
+let editMode = false;
+let saveTimer = null;
+let activeQuery = "chat";
+let activeChannel = "web";
+let activeArchitecture = "intent";
+let activePlatform = "vision";
+let activeValue = "conversion";
+let requiresPin = false;
 
 const navButtons = [...document.querySelectorAll(".brief-nav-button")];
 const sections = [...document.querySelectorAll("[data-brief-step]")];
@@ -168,79 +16,233 @@ const channelDetail = document.querySelector("#channelDetail");
 const architectureDetail = document.querySelector("#architectureDetail");
 const platformDetail = document.querySelector("#platformDetail");
 const valueDetail = document.querySelector("#valueDetail");
+const editButton = document.querySelector("#editBrief");
+const resetButton = document.querySelector("#resetBrief");
+const saveStatus = document.querySelector("#briefSaveStatus");
+
+function textValue(value) {
+  return String(value ?? "");
+}
+
+function displayText(value) {
+  return textValue(value).replace(/\s+/g, " ").trim();
+}
+
+function escapeHtml(value) {
+  return textValue(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function editableHtml(value, path) {
+  return `<span data-edit-path="${escapeHtml(path)}">${escapeHtml(value)}</span>`;
+}
+
+function getPath(path) {
+  return path.split(".").reduce((value, key) => value?.[key], briefingContent);
+}
+
+function setPath(path, value) {
+  const keys = path.split(".");
+  let target = briefingContent;
+  for (const key of keys.slice(0, -1)) {
+    if (!target[key] || typeof target[key] !== "object") target[key] = {};
+    target = target[key];
+  }
+  target[keys.at(-1)] = value;
+}
+
+function setStatus(message, state = "") {
+  if (!saveStatus) return;
+  saveStatus.textContent = message;
+  saveStatus.dataset.state = state;
+}
+
+function fieldEntries() {
+  return Object.entries(briefingContent?.fields || {});
+}
+
+function applyStaticFields() {
+  for (const [key, field] of fieldEntries()) {
+    const element = document.querySelector(field.selector);
+    if (!element) continue;
+    element.textContent = field.value;
+    element.dataset.editKey = key;
+  }
+}
+
+function captureStaticField(element) {
+  const field = briefingContent?.fields?.[element.dataset.editKey];
+  if (!field) return;
+  field.value = displayText(element.textContent);
+}
+
+function capturePathField(element) {
+  const path = element.dataset.editPath;
+  if (!path) return;
+  setPath(path, displayText(element.textContent));
+}
+
+function captureElement(element) {
+  if (element.dataset.editKey) captureStaticField(element);
+  if (element.dataset.editPath) capturePathField(element);
+}
+
+function collectVisibleEdits() {
+  document.querySelectorAll("[data-edit-key], [data-edit-path]").forEach(captureElement);
+}
+
+async function saveBriefingContent({ immediate = false } = {}) {
+  if (!editMode) return;
+  collectVisibleEdits();
+  window.clearTimeout(saveTimer);
+  const run = async () => {
+    setStatus("Saving", "saving");
+    try {
+      const response = await fetch("/api/briefing-content", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          pin: briefingPin,
+          updatedBy: "anonymous",
+          content: briefingContent
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "Could not save briefing.");
+      briefingContent = payload.content;
+      setStatus("Saved", "saved");
+    } catch (error) {
+      setStatus(`Error: ${error.message}`, "error");
+    } finally {
+      applyEditMode();
+    }
+  };
+  if (immediate) return run();
+  saveTimer = window.setTimeout(run, 700);
+}
+
+function applyEditMode() {
+  document.body.classList.toggle("brief-edit-mode", editMode);
+  editButton.textContent = editMode ? "Done" : "Edit";
+  resetButton.hidden = !editMode;
+  document.querySelectorAll("[data-edit-key], [data-edit-path]").forEach((element) => {
+    element.contentEditable = editMode ? "true" : "false";
+    element.spellcheck = editMode;
+    element.classList.toggle("brief-editable", editMode);
+    element.removeEventListener("input", onEditableInput);
+    element.removeEventListener("blur", onEditableBlur);
+    if (editMode) {
+      element.addEventListener("input", onEditableInput);
+      element.addEventListener("blur", onEditableBlur);
+    }
+  });
+}
+
+function onEditableInput(event) {
+  captureElement(event.currentTarget);
+  saveBriefingContent();
+}
+
+function onEditableBlur(event) {
+  captureElement(event.currentTarget);
+  saveBriefingContent({ immediate: true });
+}
 
 function renderQuery(key) {
-  const item = queryContent[key] || queryContent.chat;
+  activeQuery = key;
+  const content = briefingContent?.interactiveContent?.query || {};
+  const item = content[key] || content.chat;
+  if (!item) return;
   queryDetail.innerHTML = `
-    <p class="eyebrow">${item.label}</p>
-    <h3>${item.title}</h3>
+    <p class="eyebrow">${editableHtml(item.label, `interactiveContent.query.${key}.label`)}</p>
+    <h3>${editableHtml(item.title, `interactiveContent.query.${key}.title`)}</h3>
     <div class="chat-example">
       <span>Customer input</span>
-      <strong>${item.input}</strong>
+      <strong>${editableHtml(item.input, `interactiveContent.query.${key}.input`)}</strong>
     </div>
     <div class="detail-columns">
-      <div><span>Assistant output</span><p>${item.output}</p></div>
-      <div><span>Business value</span><p>${item.value}</p></div>
+      <div><span>Assistant output</span><p>${editableHtml(item.output, `interactiveContent.query.${key}.output`)}</p></div>
+      <div><span>Business value</span><p>${editableHtml(item.value, `interactiveContent.query.${key}.value`)}</p></div>
     </div>
   `;
   document.querySelectorAll(".query-button").forEach((button) => {
     button.classList.toggle("active", button.dataset.query === key);
   });
+  applyEditMode();
 }
 
 function renderChannel(key) {
-  const item = channelContent[key] || channelContent.web;
+  activeChannel = key;
+  const content = briefingContent?.interactiveContent?.channel || {};
+  const item = content[key] || content.web;
+  if (!item) return;
   channelDetail.innerHTML = `
     <p class="eyebrow">Deployment surface</p>
-    <h3>${item.title}</h3>
+    <h3>${editableHtml(item.title, `interactiveContent.channel.${key}.title`)}</h3>
     <div class="detail-columns">
-      <div><span>Channel role</span><p>${item.job}</p></div>
-      <div><span>OpenAI enabler</span><p>${item.enabler}</p></div>
-      <div><span>Outcome</span><p>${item.outcome}</p></div>
+      <div><span>Channel role</span><p>${editableHtml(item.job, `interactiveContent.channel.${key}.job`)}</p></div>
+      <div><span>OpenAI enabler</span><p>${editableHtml(item.enabler, `interactiveContent.channel.${key}.enabler`)}</p></div>
+      <div><span>Outcome</span><p>${editableHtml(item.outcome, `interactiveContent.channel.${key}.outcome`)}</p></div>
     </div>
   `;
   document.querySelectorAll(".channel-button").forEach((button) => {
     button.classList.toggle("active", button.dataset.channel === key);
   });
+  applyEditMode();
 }
 
 function renderArchitecture(key) {
-  const item = architectureContent[key] || architectureContent.intent;
+  activeArchitecture = key;
+  const content = briefingContent?.interactiveContent?.architecture || {};
+  const item = content[key] || content.intent;
+  if (!item) return;
   architectureDetail.innerHTML = `
-    <p class="eyebrow">${item.primitive}</p>
-    <h3>${item.title}</h3>
-    <p>${item.body}</p>
-    <strong>${item.value}</strong>
+    <p class="eyebrow">${editableHtml(item.primitive, `interactiveContent.architecture.${key}.primitive`)}</p>
+    <h3>${editableHtml(item.title, `interactiveContent.architecture.${key}.title`)}</h3>
+    <p>${editableHtml(item.body, `interactiveContent.architecture.${key}.body`)}</p>
+    <strong>${editableHtml(item.value, `interactiveContent.architecture.${key}.value`)}</strong>
   `;
   document.querySelectorAll(".flow-node").forEach((button) => {
     button.classList.toggle("active", button.dataset.arch === key);
   });
+  applyEditMode();
 }
 
 function renderPlatform(key) {
-  const item = platformContent[key] || platformContent.vision;
+  activePlatform = key;
+  const content = briefingContent?.interactiveContent?.platform || {};
+  const item = content[key] || content.vision;
+  if (!item) return;
   platformDetail.innerHTML = `
-    <p class="eyebrow">${item.title}</p>
-    <h3>${item.headline}</h3>
+    <p class="eyebrow">${editableHtml(item.title, `interactiveContent.platform.${key}.title`)}</p>
+    <h3>${editableHtml(item.headline, `interactiveContent.platform.${key}.headline`)}</h3>
     <div class="detail-columns">
-      <div><span>Use in solution</span><p>${item.use}</p></div>
-      <div><span>Business value</span><p>${item.value}</p></div>
+      <div><span>Use in solution</span><p>${editableHtml(item.use, `interactiveContent.platform.${key}.use`)}</p></div>
+      <div><span>Business value</span><p>${editableHtml(item.value, `interactiveContent.platform.${key}.value`)}</p></div>
     </div>
   `;
   document.querySelectorAll(".platform-button").forEach((button) => {
     button.classList.toggle("active", button.dataset.platform === key);
   });
+  applyEditMode();
 }
 
 function renderValue(key) {
-  const item = valueContent[key] || valueContent.conversion;
+  activeValue = key;
+  const content = briefingContent?.interactiveContent?.value || {};
+  const item = content[key] || content.conversion;
+  if (!item) return;
   valueDetail.innerHTML = `
     <p class="eyebrow">Value driver</p>
-    <h3>${item.title}</h3>
+    <h3>${editableHtml(item.title, `interactiveContent.value.${key}.title`)}</h3>
     <div class="detail-columns">
-      <div><span>Goal</span><p>${item.goal}</p></div>
-      <div><span>OpenAI enabler</span><p>${item.enabler}</p></div>
-      <div><span>Metric</span><p>${item.metric}</p></div>
+      <div><span>Goal</span><p>${editableHtml(item.goal, `interactiveContent.value.${key}.goal`)}</p></div>
+      <div><span>OpenAI enabler</span><p>${editableHtml(item.enabler, `interactiveContent.value.${key}.enabler`)}</p></div>
+      <div><span>Metric</span><p>${editableHtml(item.metric, `interactiveContent.value.${key}.metric`)}</p></div>
     </div>
   `;
   document.querySelectorAll(".value-button").forEach((button) => {
@@ -248,6 +250,15 @@ function renderValue(key) {
     button.classList.toggle("active", active);
     button.setAttribute("aria-selected", String(active));
   });
+  applyEditMode();
+}
+
+function renderInteractiveContent() {
+  renderQuery(activeQuery);
+  renderChannel(activeChannel);
+  renderArchitecture(activeArchitecture);
+  renderPlatform(activePlatform);
+  renderValue(activeValue);
 }
 
 function setActiveSection(id, shouldScroll = true) {
@@ -266,12 +277,58 @@ function syncActiveSection() {
   if (current?.id) setActiveSection(current.id, false);
 }
 
+async function fetchBriefingContent() {
+  const response = await fetch("/api/briefing-content");
+  if (!response.ok) throw new Error("Could not load briefing content.");
+  const payload = await response.json();
+  briefingContent = payload.content;
+  requiresPin = Boolean(payload.requiresPin);
+  setStatus(payload.source === "blob" ? "Live" : "Default", payload.source);
+  applyStaticFields();
+  renderInteractiveContent();
+  applyEditMode();
+}
+
+async function toggleEditMode() {
+  if (!editMode && requiresPin && !briefingPin) {
+    briefingPin = window.prompt("Enter briefing edit PIN") || "";
+    if (!briefingPin) return;
+    sessionStorage.setItem("briefingEditPin", briefingPin);
+  }
+  if (editMode) await saveBriefingContent({ immediate: true });
+  editMode = !editMode;
+  setStatus(editMode ? "Editing" : "Saved", editMode ? "editing" : "saved");
+  applyEditMode();
+}
+
+async function resetBriefingContent() {
+  if (!window.confirm("Reset the executive briefing to the default content?")) return;
+  setStatus("Resetting", "saving");
+  try {
+    const response = await fetch("/api/briefing-content/reset", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ pin: briefingPin, updatedBy: "anonymous" })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "Could not reset briefing.");
+    briefingContent = payload.content;
+    applyStaticFields();
+    renderInteractiveContent();
+    setStatus("Reset", "saved");
+  } catch (error) {
+    setStatus(`Error: ${error.message}`, "error");
+  }
+}
+
 navButtons.forEach((button) => {
   button.addEventListener("click", () => setActiveSection(button.dataset.target));
 });
 
 document.querySelector("#startBrief")?.addEventListener("click", () => setActiveSection("situation"));
 document.querySelector("#printBrief")?.addEventListener("click", () => window.print());
+editButton?.addEventListener("click", toggleEditMode);
+resetButton?.addEventListener("click", resetBriefingContent);
 
 document.querySelectorAll(".query-button").forEach((button) => {
   button.addEventListener("click", () => renderQuery(button.dataset.query));
@@ -294,9 +351,10 @@ document.querySelectorAll(".value-button").forEach((button) => {
 });
 
 window.addEventListener("scroll", syncActiveSection, { passive: true });
-renderQuery("chat");
-renderChannel("web");
-renderArchitecture("intent");
-renderPlatform("vision");
-renderValue("conversion");
-syncActiveSection();
+
+fetchBriefingContent()
+  .then(syncActiveSection)
+  .catch((error) => {
+    console.error(error);
+    setStatus("Content load error", "error");
+  });

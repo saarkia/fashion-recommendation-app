@@ -3,6 +3,7 @@ import { readFile, stat } from "node:fs/promises";
 import { createReadStream, existsSync } from "node:fs";
 import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { get, put } from "@vercel/blob";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const root = resolve(__dirname, "..");
@@ -10,6 +11,9 @@ const publicDir = join(root, "public");
 const dataDir = join(root, "data");
 const imageDir = join(publicDir, "catalog-images");
 const PORT = Number(process.env.PORT || 4173);
+const BRIEFING_BLOB_PATH = "briefing/content.json";
+const BRIEFING_EDIT_PIN = process.env.BRIEFING_EDIT_PIN;
+const BLOB_READ_WRITE_TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
 const VECTOR_DIMS = 3072;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL_FAST = process.env.OPENAI_MODEL_FAST || process.env.OPENAI_MODEL || "gpt-5.4-nano";
@@ -26,6 +30,8 @@ const PUBLIC_APP_URL = (process.env.PUBLIC_APP_URL || "https://fashion-recommend
 
 const productsPath = join(dataDir, "products.json");
 const vectorsPath = join(dataDir, "embeddings.f32");
+const defaultBriefingContentPath = join(publicDir, "briefing-content.default.json");
+let localBriefingContent = null;
 
 if (!existsSync(productsPath) || !existsSync(vectorsPath)) {
   console.error("Missing prepared data. Run `npm run prepare:data` first.");
@@ -2436,6 +2442,105 @@ function jsonResponse(res, status, body) {
   res.end(payload);
 }
 
+async function readJsonBody(req) {
+  let body = "";
+  for await (const chunk of req) body += chunk;
+  return JSON.parse(body || "{}");
+}
+
+async function readDefaultBriefingContent() {
+  return JSON.parse(await readFile(defaultBriefingContentPath, "utf8"));
+}
+
+function validateStringRecord(value, path = "content") {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${path} must be an object.`);
+  }
+  for (const [key, item] of Object.entries(value)) {
+    const nextPath = `${path}.${key}`;
+    if (typeof item === "string") {
+      if (item.length > 4000) throw new Error(`${nextPath} is too long.`);
+      continue;
+    }
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new Error(`${nextPath} must be a string or object.`);
+    }
+    validateStringRecord(item, nextPath);
+  }
+}
+
+function validateBriefingContent(content) {
+  if (!content || typeof content !== "object" || Array.isArray(content)) {
+    throw new Error("Briefing content must be an object.");
+  }
+  if (content.schemaVersion !== 1) throw new Error("Unsupported briefing content schema.");
+  if (!content.fields || typeof content.fields !== "object" || Array.isArray(content.fields)) {
+    throw new Error("Briefing fields must be an object.");
+  }
+  for (const [key, field] of Object.entries(content.fields)) {
+    if (!field || typeof field !== "object" || Array.isArray(field)) throw new Error(`Invalid field: ${key}`);
+    if (typeof field.selector !== "string" || !field.selector.trim()) throw new Error(`Missing selector: ${key}`);
+    if (typeof field.value !== "string") throw new Error(`Missing value: ${key}`);
+    if (field.value.length > 4000) throw new Error(`Field is too long: ${key}`);
+  }
+  validateStringRecord(content.interactiveContent || {}, "interactiveContent");
+  return {
+    schemaVersion: 1,
+    updatedAt: typeof content.updatedAt === "string" ? content.updatedAt : new Date().toISOString(),
+    updatedBy: typeof content.updatedBy === "string" && content.updatedBy.trim() ? content.updatedBy.trim().slice(0, 80) : "anonymous",
+    sections: content.sections && typeof content.sections === "object" && !Array.isArray(content.sections) ? content.sections : {},
+    fields: content.fields,
+    interactiveContent: content.interactiveContent || {}
+  };
+}
+
+async function getBriefingContent() {
+  const fallback = localBriefingContent || await readDefaultBriefingContent();
+  if (!BLOB_READ_WRITE_TOKEN) {
+    return { content: fallback, source: localBriefingContent ? "memory" : "default" };
+  }
+  try {
+    const blob = await get(BRIEFING_BLOB_PATH, {
+      access: "private",
+      useCache: false,
+      token: BLOB_READ_WRITE_TOKEN
+    });
+    if (!blob) return { content: fallback, source: "default" };
+    const text = await new Response(blob.stream).text();
+    return { content: validateBriefingContent(JSON.parse(text)), source: "blob" };
+  } catch (error) {
+    console.warn(`Using default briefing content: ${error.message}`);
+    return { content: fallback, source: "default" };
+  }
+}
+
+async function saveBriefingContent(content) {
+  const validated = validateBriefingContent({
+    ...content,
+    updatedAt: new Date().toISOString()
+  });
+  if (!BLOB_READ_WRITE_TOKEN) {
+    localBriefingContent = validated;
+    return { content: validated, source: "memory" };
+  }
+  await put(BRIEFING_BLOB_PATH, JSON.stringify(validated, null, 2), {
+    access: "private",
+    contentType: "application/json; charset=utf-8",
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    token: BLOB_READ_WRITE_TOKEN
+  });
+  return { content: validated, source: "blob" };
+}
+
+function assertBriefingPin(pin) {
+  if (BRIEFING_EDIT_PIN && String(pin || "") !== BRIEFING_EDIT_PIN) {
+    const error = new Error("Incorrect briefing edit PIN.");
+    error.statusCode = 401;
+    throw error;
+  }
+}
+
 async function serveStatic(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   if (url.pathname.startsWith("/catalog-images/")) {
@@ -2481,20 +2586,39 @@ export async function handler(req, res) {
         inspiration: pickInspiration()
       });
     }
+    if (req.method === "GET" && url.pathname === "/api/briefing-content") {
+      const result = await getBriefingContent();
+      return jsonResponse(res, 200, {
+        ...result,
+        requiresPin: Boolean(BRIEFING_EDIT_PIN)
+      });
+    }
+    if (req.method === "PUT" && url.pathname === "/api/briefing-content") {
+      const payload = await readJsonBody(req);
+      assertBriefingPin(payload.pin);
+      const result = await saveBriefingContent({
+        ...payload.content,
+        updatedBy: compactText(payload.updatedBy) || "anonymous"
+      });
+      return jsonResponse(res, 200, result);
+    }
+    if (req.method === "POST" && url.pathname === "/api/briefing-content/reset") {
+      const payload = await readJsonBody(req);
+      assertBriefingPin(payload.pin);
+      const result = await saveBriefingContent({
+        ...await readDefaultBriefingContent(),
+        updatedBy: compactText(payload.updatedBy) || "anonymous"
+      });
+      return jsonResponse(res, 200, result);
+    }
     if (req.method === "POST" && url.pathname === "/api/recommend") {
-      let body = "";
-      for await (const chunk of req) body += chunk;
-      return jsonResponse(res, 200, await recommend(JSON.parse(body || "{}")));
+      return jsonResponse(res, 200, await recommend(await readJsonBody(req)));
     }
     if (req.method === "POST" && url.pathname === "/api/chat") {
-      let body = "";
-      for await (const chunk of req) body += chunk;
-      return jsonResponse(res, 200, await runChatAgent(JSON.parse(body || "{}")));
+      return jsonResponse(res, 200, await runChatAgent(await readJsonBody(req)));
     }
     if (req.method === "POST" && url.pathname === "/api/send-outfit-email") {
-      let body = "";
-      for await (const chunk of req) body += chunk;
-      const payload = JSON.parse(body || "{}");
+      const payload = await readJsonBody(req);
       if (!isValidEmail(payload.email)) return jsonResponse(res, 400, { error: "Enter a valid email address." });
       if (!payload.currentRecommendation?.outfit?.length) {
         return jsonResponse(res, 400, { error: "Generate an outfit before sending an email." });
@@ -2506,9 +2630,7 @@ export async function handler(req, res) {
       }));
     }
     if (req.method === "POST" && url.pathname === "/api/select-lookup-item") {
-      let body = "";
-      for await (const chunk of req) body += chunk;
-      const payload = JSON.parse(body || "{}");
+      const payload = await readJsonBody(req);
       return jsonResponse(res, 200, await previewSelectedLookupProduct({
         recommendation: payload.currentRecommendation,
         productId: payload.productId

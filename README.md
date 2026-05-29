@@ -48,12 +48,22 @@ BRAZE_OUTFIT_EMAIL_CAMPAIGN_ID="..."
 PUBLIC_APP_URL="https://fashion-recommendation-app.vercel.app"
 ```
 
+Optional executive briefing editing is configured server-side with:
+
+```bash
+BLOB_READ_WRITE_TOKEN="..."
+BRIEFING_EDIT_PIN="1234"
+```
+
+If `BLOB_READ_WRITE_TOKEN` is not set, `/briefing` uses the checked-in default content and local in-memory saves for development only.
+
 ## Deploy To Vercel
 
 1. Push this repository to GitHub.
 2. Import the repo in Vercel.
 3. Add `OPENAI_API_KEY` as an environment variable if you want the AI-powered path.
 4. Add the Braze environment variables above if you want Mira to send triggered outfit emails.
-5. Deploy.
+5. Add `BLOB_READ_WRITE_TOKEN` if you want executive briefing edits to persist globally.
+6. Deploy.
 
 The included `vercel.json` routes all requests through the Node handler in `server/index.mjs`.

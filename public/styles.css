@@ -3150,6 +3150,40 @@ input[type="range"] {
   color: #fff;
 }
 
+.brief-save-status {
+  min-width: 64px;
+  color: #565b63;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.brief-save-status[data-state="saving"],
+.brief-save-status[data-state="editing"] {
+  color: #7a4b00;
+}
+
+.brief-save-status[data-state="saved"],
+.brief-save-status[data-state="blob"] {
+  color: #0b6b42;
+}
+
+.brief-save-status[data-state="error"] {
+  color: #b42318;
+}
+
+.brief-edit-mode .brief-editable {
+  outline: 2px dashed rgba(16, 163, 127, 0.75);
+  outline-offset: 3px;
+  cursor: text;
+}
+
+.brief-edit-mode .brief-editable:focus {
+  background: #eef8f5;
+  outline: 3px solid #10a37f;
+}
+
 .brief-shell {
   display: grid;
   grid-template-columns: 245px minmax(0, 1fr);
@@ -4125,7 +4159,10 @@ input[type="range"] {
 @media print {
   .brief-header,
   .brief-rail,
-  .brief-hero-actions {
+  .brief-hero-actions,
+  .brief-edit-only,
+  #editBrief,
+  #briefSaveStatus {
     display: none;
   }
 

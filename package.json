@@ -9,5 +9,8 @@
     "qa:refinement": "node scripts/refinement-qa.mjs",
     "render:briefing-pdf": "node scripts/render_briefing_pdf.mjs",
     "start": "node server/index.mjs"
+  },
+  "dependencies": {
+    "@vercel/blob": "^2.4.0"
   }
 }
