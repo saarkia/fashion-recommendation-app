@@ -11,3 +11,4 @@ yarn-error.log*
 slides/
 scripts/render_deck.cjs
 .vercel
+.env*
