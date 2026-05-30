@@ -8,7 +8,6 @@ const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || "";
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
 const TWILIO_WHATSAPP_FROM = process.env.TWILIO_WHATSAPP_FROM || "whatsapp:+14155238886";
 const TWILIO_API_BASE = "https://api.twilio.com/2010-04-01";
-const TWILIO_MESSAGING_BASE = "https://messaging.twilio.com/v2";
 const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const WHATSAPP_SEND_SPACING_MS = Number(process.env.WHATSAPP_SEND_SPACING_MS || 1300);
 const BLOB_READ_WRITE_TOKEN = process.env.BLOB_READ_WRITE_TOKEN || "";
@@ -194,21 +193,8 @@ function twiml(message) {
   return `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(message)}</Message></Response>`;
 }
 
-function emptyTwiml() {
-  return `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`;
-}
-
 function sendXml(res, message) {
   const body = twiml(message);
-  res.writeHead(200, {
-    "content-type": "text/xml; charset=utf-8",
-    "content-length": Buffer.byteLength(body)
-  });
-  res.end(body);
-}
-
-function sendEmptyXml(res) {
-  const body = emptyTwiml();
   res.writeHead(200, {
     "content-type": "text/xml; charset=utf-8",
     "content-length": Buffer.byteLength(body)
@@ -378,42 +364,6 @@ async function safeSendWhatsApp(to, body, options = {}) {
     return await sendWhatsApp(to, body, options);
   } catch (error) {
     console.error(`WhatsApp send failed: ${error.message}`);
-    return null;
-  }
-}
-
-async function sendTypingIndicator(inboundMessageSid) {
-  const messageSid = compactText(inboundMessageSid);
-  if (!messageSid) return null;
-  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
-    console.warn(`Would send WhatsApp typing indicator for ${messageSid}.`);
-    return null;
-  }
-
-  const form = new URLSearchParams({
-    messageId: messageSid,
-    channel: "whatsapp"
-  });
-  const response = await fetch(`${TWILIO_MESSAGING_BASE}/Indicators/Typing.json`, {
-    method: "POST",
-    headers: {
-      "authorization": `Basic ${Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString("base64")}`,
-      "content-type": "application/x-www-form-urlencoded"
-    },
-    body: form.toString()
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.message || `Twilio typing indicator returned ${response.status}`);
-  }
-  return payload;
-}
-
-async function safeSendTypingIndicator(inboundMessageSid) {
-  try {
-    return await sendTypingIndicator(inboundMessageSid);
-  } catch (error) {
-    console.warn(`WhatsApp typing indicator skipped: ${error.message}`);
     return null;
   }
 }
@@ -591,6 +541,13 @@ function finaliseIntakePayload(intake) {
   };
 }
 
+function readyToRecommendPrompt(payload) {
+  return [
+    `Perfect — I’ve got ${eventLabel(payload.eventType)}, ${styleLabel(payload.stylePreference)}, and a $${payload.budgetMax} budget.`,
+    `Mira is checking the RetailNEXT catalogue, budget and ${payload.store} availability now.`
+  ].join("\n");
+}
+
 function handleIntakeMessage(session, message) {
   const intake = ensureIntake(session);
   const slots = applyIntakeSlots(session, message);
@@ -612,7 +569,8 @@ function handleIntakeMessage(session, message) {
   intake.askedFor = null;
   return {
     action: "build",
-    payload
+    payload,
+    response: readyToRecommendPrompt(payload)
   };
 }
 
@@ -662,9 +620,8 @@ async function continueChat(from, message, session) {
   await safeSendWhatsApp(from, formatChatResult(data));
 }
 
-async function handleAsyncMessage(from, message, session, recommendationPayload = null, { inboundMessageSid = "" } = {}) {
+async function handleAsyncMessage(from, message, session, recommendationPayload = null) {
   try {
-    await safeSendTypingIndicator(inboundMessageSid);
     if (!session.recommendation) {
       await buildRecommendation(from, message, session, recommendationPayload);
       return;
@@ -736,7 +693,6 @@ export async function handleTwilioWebhook(req, res, { schedule = (promise) => { 
   const form = await readTwilioForm(req);
   const from = compactText(form.From);
   const message = compactText(form.Body);
-  const inboundMessageSid = compactText(form.MessageSid || form.SmsMessageSid || form.SmsSid);
   if (!from) return sendXml(res, "Mira could not identify the WhatsApp sender.");
 
   const session = await loadSession(from);
@@ -747,13 +703,17 @@ export async function handleTwilioWebhook(req, res, { schedule = (promise) => { 
     const intake = handleIntakeMessage(session, message);
     await saveSession(session);
     if (intake.action === "ask") return sendXml(res, intake.response);
-    sendEmptyXml(res);
-    schedule(handleAsyncMessage(from, message, session, intake.payload, { inboundMessageSid }));
+    sendXml(res, intake.response);
+    schedule(handleAsyncMessage(from, message, session, intake.payload));
     return;
   }
 
-  sendEmptyXml(res);
-  schedule(handleAsyncMessage(from, message, session, null, { inboundMessageSid }));
+  const ack = session.recommendation
+    ? "Mira is checking the current outfit against the RetailNEXT catalogue and store availability."
+    : "Mira is checking the RetailNEXT catalogue, budget and store availability now.";
+  sendXml(res, ack);
+
+  schedule(handleAsyncMessage(from, message, session));
 }
 
 export async function handleBridgeRequest(req, res, { schedule } = {}) {
