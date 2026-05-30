@@ -8,6 +8,7 @@ const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
 const TWILIO_WHATSAPP_FROM = process.env.TWILIO_WHATSAPP_FROM || "whatsapp:+14155238886";
 const TWILIO_API_BASE = "https://api.twilio.com/2010-04-01";
 const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
+const WHATSAPP_SEND_SPACING_MS = Number(process.env.WHATSAPP_SEND_SPACING_MS || 1300);
 
 const sessions = new Map();
 
@@ -157,10 +158,14 @@ async function postMiraJson(path, body) {
   return payload;
 }
 
-async function sendWhatsApp(to, body) {
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function sendWhatsApp(to, body, { mediaUrl = "" } = {}) {
   if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
     console.warn("Skipping outbound WhatsApp send because Twilio credentials are not configured.");
-    console.warn(`Would send to ${to}: ${body}`);
+    console.warn(`Would send to ${to}: ${body}${mediaUrl ? `\nMedia: ${mediaUrl}` : ""}`);
     return null;
   }
 
@@ -169,6 +174,7 @@ async function sendWhatsApp(to, body) {
     To: to,
     Body: body
   });
+  if (mediaUrl) form.append("MediaUrl", mediaUrl);
   const response = await fetch(`${TWILIO_API_BASE}/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`, {
     method: "POST",
     headers: {
@@ -184,9 +190,9 @@ async function sendWhatsApp(to, body) {
   return payload;
 }
 
-async function safeSendWhatsApp(to, body) {
+async function safeSendWhatsApp(to, body, options = {}) {
   try {
-    return await sendWhatsApp(to, body);
+    return await sendWhatsApp(to, body, options);
   } catch (error) {
     console.error(`WhatsApp send failed: ${error.message}`);
     return null;
@@ -202,15 +208,13 @@ function inventoryCount(product, store) {
   return Number(product?.inventory?.[store] || 0);
 }
 
-function formatOutfitItems(recommendation, maxItems = 4) {
-  const store = recommendation.store || "selected store";
-  return (recommendation.outfit || [])
-    .slice(0, maxItems)
-    .map((product, index) => {
-      const stock = inventoryCount(product, store);
-      return `${index + 1}. ${roleLabel(product.role || product.articleType)}: ${product.productDisplayName} - $${product.price} (${stock} at ${store})`;
-    })
-    .join("\n");
+function absoluteImageUrl(product) {
+  const image = product?.image;
+  if (!image || image.startsWith("data:")) return "";
+  if (image.startsWith("http://") || image.startsWith("https://")) return image;
+  if (image.startsWith("/")) return `${MIRA_BASE_URL}${image}`;
+  if (product?.id) return `${MIRA_BASE_URL}/catalog-images/${product.id}.jpg`;
+  return "";
 }
 
 function formatRecommendation(recommendation) {
@@ -219,18 +223,49 @@ function formatRecommendation(recommendation) {
   const business = recommendation.business || {};
   const basketValue = business.basketValue || (recommendation.outfit || []).reduce((sum, product) => sum + Number(product.price || 0), 0);
   const availableToday = business.availableToday ?? (recommendation.outfit || []).filter((product) => inventoryCount(product, recommendation.store) > 0).length;
+  const introLines = (recommendation.analysis?.introLines || [])
+    .map((line) => compactText(line))
+    .filter(Boolean)
+    .slice(0, 2);
+  const mission = compactText(recommendation.agent?.mission);
+  const styleSignal = compactText(recommendation.agent?.styleSignal);
+  const openAiSignal = recommendation.ai?.copyGeneration === "openai" || recommendation.agent?.source === "openai"
+    ? "OpenAI-written styling notes, grounded in RetailNEXT catalogue and store data."
+    : "Styling notes grounded in RetailNEXT catalogue and store data.";
 
   return [
-    `Mira found an outfit for ${String(event).toLowerCase()} around ${starter}.`,
-    `Basket: $${basketValue}`,
-    `Available today: ${availableToday}/${(recommendation.outfit || []).length} at ${recommendation.store}`,
+    introLines[0] || `I built this around ${starter} for ${String(event).toLowerCase()}.`,
+    introLines[1] || mission || styleSignal || `I checked the look against ${recommendation.store} availability before showing it to you.`,
     "",
-    formatOutfitItems(recommendation),
+    `Basket: $${basketValue} | Available today: ${availableToday}/${(recommendation.outfit || []).length} at ${recommendation.store}`,
+    openAiSignal,
     "",
-    `Open the live stylist: ${MIRA_BASE_URL}`,
+    "I’ll send the pieces with images next.",
     "",
     `Reply "change shoes", "apply", "save", or "reset".`
   ].filter((line) => line !== undefined && line !== null).join("\n");
+}
+
+function formatProductCaption(product, recommendation) {
+  const store = recommendation.store || "selected store";
+  const stock = inventoryCount(product, store);
+  return [
+    `${roleLabel(product.role || product.articleType)}: ${product.productDisplayName}`,
+    `$${product.price} | ${stock} at ${store}`,
+    compactText(product.why)
+  ].filter(Boolean).join("\n");
+}
+
+async function sendRecommendationMessages(from, recommendation) {
+  await safeSendWhatsApp(from, formatRecommendation(recommendation));
+  for (const product of (recommendation.outfit || []).slice(0, 4)) {
+    const imageUrl = absoluteImageUrl(product);
+    if (!imageUrl) continue;
+    await sleep(WHATSAPP_SEND_SPACING_MS);
+    await safeSendWhatsApp(from, formatProductCaption(product, recommendation), { mediaUrl: imageUrl });
+  }
+  await sleep(WHATSAPP_SEND_SPACING_MS);
+  await safeSendWhatsApp(from, `Open the live stylist: ${MIRA_BASE_URL}`);
 }
 
 function formatPreview(data) {
@@ -291,7 +326,7 @@ async function buildRecommendation(from, message, session) {
   session.history.push({ role: "assistant", content: "Mira generated a RetailNEXT outfit recommendation." });
   session.updatedAt = now();
 
-  await safeSendWhatsApp(from, formatRecommendation(recommendation));
+  await sendRecommendationMessages(from, recommendation);
 }
 
 async function continueChat(from, message, session) {
