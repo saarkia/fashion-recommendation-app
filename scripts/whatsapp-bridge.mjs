@@ -415,7 +415,7 @@ function formatRecommendation(recommendation) {
     `Basket: $${basketValue} | Available today: ${availableToday}/${(recommendation.outfit || []).length} at ${recommendation.store}`,
     openAiSignal,
     "",
-    "I’ll send the pieces with images next.",
+    `Open the live stylist: ${MIRA_BASE_URL}`,
     "",
     `Reply "change shoes", "apply", "save", or "reset".`
   ].filter((line) => line !== undefined && line !== null).join("\n");
@@ -432,15 +432,8 @@ function formatProductCaption(product, recommendation) {
 }
 
 async function sendRecommendationMessages(from, recommendation) {
-  await safeSendWhatsApp(from, formatRecommendation(recommendation));
-  for (const product of (recommendation.outfit || []).slice(0, 4)) {
-    const imageUrl = absoluteImageUrl(product);
-    if (!imageUrl) continue;
-    await sleep(WHATSAPP_SEND_SPACING_MS);
-    await safeSendWhatsApp(from, formatProductCaption(product, recommendation), { mediaUrl: imageUrl });
-  }
-  await sleep(WHATSAPP_SEND_SPACING_MS);
-  await safeSendWhatsApp(from, `Open the live stylist: ${MIRA_BASE_URL}`);
+  const heroImageUrl = absoluteImageUrl((recommendation.outfit || [])[0]);
+  await safeSendWhatsApp(from, formatRecommendation(recommendation), { mediaUrl: heroImageUrl });
 }
 
 function formatPreview(data) {
