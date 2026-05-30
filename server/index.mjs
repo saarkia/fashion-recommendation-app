@@ -922,6 +922,7 @@ async function findAlternativeProducts({ recommendation, chatState, args, messag
   const slot = roleSlotForProduct(target, target.role);
   const gender = analysis.gender || reference.gender;
   const budgetMax = Math.max(target.price + 80, recommendation.business?.basketValue || 300);
+  const targetName = compactText(target.productDisplayName).toLowerCase();
   let eventVector;
 
   try {
@@ -945,6 +946,7 @@ async function findAlternativeProducts({ recommendation, chatState, args, messag
 
   const candidates = products
     .filter((product) => !selected.has(product.id) && !blocked.has(product.id))
+    .filter((product) => compactText(product.productDisplayName).toLowerCase() !== targetName)
     .filter((product) => sameAudience(product, gender))
     .filter((product) => slotMatches(product, slot))
     .filter((product) => today ? (product.inventory[store] || 0) > 0 : Object.values(product.inventory).some((qty) => qty > 0))
@@ -1091,6 +1093,9 @@ async function enrichSubstitutionRationales({ substitutions, outfit, reference, 
     return { substitutions, source: "local" };
   }
 
+  const requestContext = reference?.id === "fresh-brief"
+    ? "Request type: complete outfit from scratch; no starter item was provided."
+    : `Starter: ${reference.productDisplayName}`;
   const output = await chatJson([
     {
       role: "system",
@@ -1105,8 +1110,8 @@ Each rationale should explain why the substitute protects the outfit if the prim
 
 Event: ${event.label}
 Store: ${store}
-Starter: ${reference.productDisplayName}
-Starter attributes: ${JSON.stringify(analysis)}
+${requestContext}
+Request attributes: ${JSON.stringify(analysis)}
 
 Primary outfit:
 ${outfit.map((product) => `- id ${product.id}: ${product.productDisplayName}; role ${product.role}; ${product.articleType}; ${product.baseColour}; ${product.usage}; $${product.price}; ${inventoryCount(product, store)} in store`).join("\n")}
@@ -1278,6 +1283,11 @@ function starterDescription(reference, analysis = {}) {
     .toLowerCase();
   const colour = compactText(analysis.color || reference.baseColour || "").toLowerCase();
   return [colour, type].filter(Boolean).join(" ");
+}
+
+function isFreshRecommendation(recommendation = {}) {
+  return recommendation.reference?.id === "fresh-brief"
+    || recommendation.analysis?.structuredAttributes?.item_type === "Complete outfit";
 }
 
 function fallbackBusinessCopy({ reference, event, store, urgency, outfit, missedCount, analysis, customerSizing }) {
@@ -1687,6 +1697,324 @@ async function recommend(payload) {
   return recommendation;
 }
 
+function freshOutfitSlots(event, style, gender = "Men") {
+  const smartTop = { role: "top", subCategories: ["Topwear"], articleTypes: ["Shirts", "Tops", "Kurtas"] };
+  const casualTop = { role: "top", subCategories: ["Topwear"], articleTypes: ["Tshirts", "Tops", "Shirts", "Kurtas"] };
+  const smartBottom = { role: "bottom", subCategories: ["Bottomwear"], articleTypes: gender === "Women" ? ["Trousers", "Skirts"] : ["Trousers"] };
+  const casualBottom = { role: "bottom", subCategories: ["Bottomwear"], articleTypes: gender === "Women" ? ["Trousers", "Jeans", "Shorts", "Skirts"] : ["Trousers", "Jeans", "Shorts"] };
+  const smartShoe = { role: "shoe", subCategories: ["Shoes", "Sandal"], articleTypes: ["Formal Shoes", "Casual Shoes", "Heels", "Flats", "Sandals"] };
+  const casualShoe = { role: "shoe", subCategories: ["Shoes", "Sandal", "Flip Flops"], articleTypes: ["Casual Shoes", "Sports Shoes", "Flats", "Sandals", "Flip Flops"] };
+  const layer = {
+    role: "layer",
+    subCategories: ["Topwear"],
+    articleTypes: ["Shirts", "Kurtas", "Tops"],
+    allowSameGroup: true,
+    disallowArticleTypes: ["Tshirts"]
+  };
+  const statement = gender === "Women"
+    ? { role: "statement piece", subCategories: ["Dress", "Topwear", "Saree"], articleTypes: ["Dresses", "Tops", "Kurtas", "Sarees"] }
+    : smartTop;
+
+  if (/vacation/i.test(event.label)) return [casualTop, casualBottom, casualShoe];
+  if (/wedding|holiday party/i.test(event.label)) return uniqueSlots([statement, smartBottom, smartShoe, layer]).slice(0, 4);
+  return [smartTop, smartBottom, smartShoe];
+}
+
+function freshReferenceForBrief({ event, style, gender }) {
+  return {
+    id: "fresh-brief",
+    index: null,
+    gender,
+    masterCategory: "Apparel",
+    subCategory: "Natural-language request",
+    articleType: "Outfit brief",
+    baseColour: style.colours?.[0] || event.colours?.[0] || "White",
+    season: event.seasons?.[0] || "General",
+    year: "",
+    usage: style.usages?.[0] || event.usages?.[0] || "General",
+    productDisplayName: "Complete outfit request",
+    price: 0,
+    inventory: {},
+    trendScore: 75,
+    image: ""
+  };
+}
+
+function freshAnalysisForBrief({ event, style, gender, slots }) {
+  return {
+    item_type: "Complete outfit",
+    category: "Natural-language request",
+    color: "No starter item",
+    gender,
+    usage: style.usages?.[0] || event.usages?.[0] || "General",
+    season: event.seasons?.[0] || "General",
+    style_notes: [`${style.label} outfit`, `${event.label} outfit`, "complete outfit from scratch"],
+    occasion_fit: event.intent,
+    suggested_searches: slots.map((slot) => ({
+      role: slot.role,
+      query: `${gender} ${style.label} ${slot.role} for ${event.label}`
+    }))
+  };
+}
+
+function freshWhyThisWorks(product, event, style, store, customerSizing = {}) {
+  const parts = [];
+  const selectedSize = sizeForProduct(product, customerSizing);
+  if (event.usages.includes(product.usage)) parts.push(`${product.usage.toLowerCase()} use fits the occasion`);
+  if (event.seasons.includes(product.season)) parts.push(`${product.season.toLowerCase()} seasonality works for the brief`);
+  if (style.colours.includes(product.baseColour) || event.colours.includes(product.baseColour)) parts.push(`${product.baseColour.toLowerCase()} sits inside the ${style.label.toLowerCase()} palette`);
+  if (selectedSize) parts.push(`selected size ${selectedSize}`);
+  if ((product.inventory[store] || 0) > 0) parts.push(`${product.inventory[store]} available at ${store}`);
+  return `${parts.slice(0, 3).join("; ")}.`;
+}
+
+function fallbackFreshBusinessCopy({ event, style, store, outfit, basketValue, availableToday, missedCount, customerSizing }) {
+  const itemNames = outfit.map((product) => product.productDisplayName).join(", ");
+  const sizeSummary = customerSizingSummary(customerSizing);
+  return {
+    introLines: [
+      `I built a complete ${style.label.toLowerCase()} outfit for ${event.label.toLowerCase()}.`,
+      `${itemNames || "The selected pieces"} work together as a practical full look, with ${availableToday}/${outfit.length} items available today at ${store}.`
+    ],
+    outfitRationale: `This full outfit is selected from scratch for ${event.label.toLowerCase()}, balancing style, budget, role coverage, and local stock.`,
+    itemReasons: Object.fromEntries(outfit.map((product) => [String(product.id), freshWhyThisWorks(product, event, style, store, customerSizing)])),
+    associatePrompt: `Show this as a complete ${event.label.toLowerCase()} outfit: ${itemNames}.${sizeSummary ? ` Saved sizes: ${sizeSummary}.` : ""}`,
+    demandInsight: `${event.insight} This fresh-outfit request found ${missedCount} relevant items with no local stock in the selected store.`,
+    source: "local"
+  };
+}
+
+async function generateFreshBusinessCopy({ event, style, store, urgency, outfit, basketValue, availableToday, missedCount, customerSizing }) {
+  const fallback = fallbackFreshBusinessCopy({ event, style, store, outfit, basketValue, availableToday, missedCount, customerSizing });
+  if (!OPENAI_API_KEY || outfit.length === 0) return fallback;
+
+  const output = await chatJson([
+    {
+      role: "system",
+      content: "You are Mira, RetailNEXT's OpenAI-powered stylist. Return only valid JSON."
+    },
+    {
+      role: "user",
+      content: `Write concise shopper-facing copy for a complete outfit built from scratch.
+
+The shopper did not provide, upload, select, or say they already own a starter item. Do not say "you started with", "your shirt", "your item", "already own", "selected", or "uploaded".
+Use only the product, price, store, stock, size, and event facts below.
+
+Event: ${event.label}
+Style: ${style.label}
+Store: ${store}
+Urgency: ${urgency}
+Basket value: $${basketValue}
+Available today: ${availableToday}/${outfit.length}
+Customer sizes: ${customerSizingSummary(customerSizing) || "not provided"}
+Missed local demand count: ${missedCount}
+
+Outfit:
+${outfit.map((product) => `- id ${product.id}: ${product.productDisplayName}; role ${product.role}; ${product.articleType}; ${product.baseColour}; selected size ${sizeForProduct(product, customerSizing) || "not applicable"}; $${product.price}; ${inventoryCount(product, store)} in ${store}; current reason: ${product.why}`).join("\n")}
+
+Return JSON:
+{
+  "introLines": ["direct first sentence", "direct second sentence"],
+  "outfitRationale": "one sentence about why the full outfit works",
+  "itemReasons": { "PRODUCT_ID": "one specific sentence for this item" },
+  "associatePrompt": "one sentence for a store associate",
+  "demandInsight": "one business insight sentence"
+}`
+    }
+  ], 1000, OPENAI_MODEL_REASONING);
+
+  const introLines = Array.isArray(output.introLines)
+    ? output.introLines.map((line) => compactText(line)).filter(Boolean).slice(0, 2)
+    : fallback.introLines;
+  return {
+    introLines: introLines.length ? introLines : fallback.introLines,
+    outfitRationale: compactText(output.outfitRationale, fallback.outfitRationale),
+    itemReasons: output.itemReasons && typeof output.itemReasons === "object" ? output.itemReasons : fallback.itemReasons,
+    associatePrompt: compactText(output.associatePrompt, fallback.associatePrompt),
+    demandInsight: compactText(output.demandInsight, fallback.demandInsight),
+    source: "openai"
+  };
+}
+
+async function recommendFresh(payload) {
+  const event = events[payload.eventType] || events["outdoor-spring-wedding"];
+  const style = styleProfiles[payload.stylePreference] || styleProfiles.classic;
+  const store = payload.store || "Chicago Loop";
+  const urgency = payload.urgency || "today";
+  const budgetMax = Number(payload.budgetMax || 650);
+  const gender = genders.includes(payload.gender) ? payload.gender : "Men";
+  const customerSizing = normalizeCustomerSizing(payload);
+  const slots = freshOutfitSlots(event, style, gender);
+  const reference = freshReferenceForBrief({ event, style, gender });
+  const analysis = freshAnalysisForBrief({ event, style, gender, slots });
+  const ai = {
+    enabled: Boolean(OPENAI_API_KEY),
+    imageAnalysis: "not_applicable",
+    queryEmbeddings: "local",
+    copyGeneration: "local",
+    recommendationReview: "not_applicable",
+    substitutionRationale: "local",
+    model: OPENAI_MODEL_FAST,
+    reasoningModel: OPENAI_MODEL_REASONING,
+    embeddingModel: OPENAI_EMBEDDING_MODEL,
+    reasoningEffortFast: reasoningEffortForModel(OPENAI_MODEL_FAST),
+    reasoningEffortReview: reasoningEffortForModel(OPENAI_MODEL_REASONING),
+    textVerbosity: OPENAI_TEXT_VERBOSITY,
+    errors: []
+  };
+  const queryStrings = slots.map((slot) => searchForRole(analysis, slot, event, style));
+  let liveQueryVectors = null;
+
+  if (OPENAI_API_KEY) {
+    try {
+      liveQueryVectors = await getOpenAIEmbeddings(queryStrings);
+      ai.queryEmbeddings = "openai";
+    } catch (error) {
+      ai.errors.push(`Embedding fallback: ${error.message}`);
+    }
+  }
+
+  const outfit = [];
+  const selected = new Set();
+  let substitutions = [];
+  let remainingBudget = budgetMax;
+
+  for (const [slotIndex, slot] of slots.entries()) {
+    const remainingSlots = slots.length - slotIndex - 1;
+    const slotBudget = Math.max(45, remainingBudget - remainingSlots * 45);
+    const eventVector = liveQueryVectors?.[slotIndex] || buildEventQueryVector(event, style, gender, slot);
+    const referenceVector = eventVector;
+    const ranked = products
+      .filter((product) => !selected.has(product.id))
+      .filter((product) => sameAudience(product, gender))
+      .filter((product) => slotMatches(product, slot))
+      .filter((product) => product.price <= slotBudget)
+      .map((product) => {
+        const score = candidateScore(product, { reference, referenceVector, eventVector, event, style, store, urgency, budgetMax: slotBudget });
+        const fit = guardrail(reference, product, event, store, urgency);
+        return { product, score, fit };
+      })
+      .filter((item) => item.fit.approved || (urgency === "today" && inventoryCount(item.product, store) > 0))
+      .sort((a, b) => b.score - a.score);
+
+    const primary = ranked[0];
+    if (!primary) continue;
+    selected.add(primary.product.id);
+    remainingBudget -= primary.product.price;
+    const role = outfitRole(primary.product, slot);
+    outfit.push({
+      ...primary.product,
+      role,
+      score: Math.round(primary.score * 100),
+      guardrail: primary.fit,
+      why: freshWhyThisWorks(primary.product, event, style, store, customerSizing),
+      retrievalQuery: queryStrings[slotIndex]
+    });
+
+    const substitute = ranked.find((item) => item.product.id !== primary.product.id && (item.product.inventory[store] || 0) >= (primary.product.inventory[store] || 0));
+    if (substitute) {
+      substitutions.push({
+        forProductId: primary.product.id,
+        ...substitute.product,
+        role: outfitRole(substitute.product, slot),
+        score: Math.round(substitute.score * 100),
+        why: `Substitute for ${role} if the first choice sells through.`
+      });
+    }
+  }
+
+  const basketValue = outfit.reduce((sum, product) => sum + product.price, 0);
+  const availableToday = outfit.filter((product) => (product.inventory[store] || 0) > 0).length;
+  const lowStock = outfit.filter((product) => (product.inventory[store] || 0) > 0 && (product.inventory[store] || 0) <= 2);
+  const missed = products
+    .filter((product) => sameAudience(product, gender))
+    .filter((product) => event.usages.includes(product.usage) || event.seasons.includes(product.season))
+    .filter((product) => (product.inventory[store] || 0) === 0)
+    .slice(0, 30);
+  try {
+    const substitutionResult = await enrichSubstitutionRationales({ substitutions, outfit, reference, event, store, analysis });
+    substitutions = substitutionResult.substitutions;
+    ai.substitutionRationale = substitutionResult.source;
+  } catch (error) {
+    ai.errors.push(`Substitution rationale fallback: ${error.message}`);
+  }
+
+  let generatedCopy;
+  try {
+    generatedCopy = await generateFreshBusinessCopy({
+      event,
+      style,
+      store,
+      urgency,
+      outfit,
+      basketValue,
+      availableToday,
+      missedCount: missed.length,
+      customerSizing
+    });
+    ai.copyGeneration = generatedCopy.source;
+  } catch (error) {
+    ai.errors.push(`Fresh copy fallback: ${error.message}`);
+    generatedCopy = fallbackFreshBusinessCopy({ event, style, store, outfit, basketValue, availableToday, missedCount: missed.length, customerSizing });
+  }
+
+  for (const product of outfit) {
+    product.why = generatedCopy.itemReasons?.[String(product.id)] || generatedCopy.itemReasons?.[product.id] || product.why;
+  }
+
+  const recommendation = {
+    analysis: {
+      item: "Complete outfit request",
+      structuredAttributes: {
+        item_type: analysis.item_type,
+        category: analysis.category,
+        color: analysis.color,
+        gender: analysis.gender,
+        usage: analysis.usage,
+        season: analysis.season
+      },
+      generatedNeed: analysis.occasion_fit,
+      styleNotes: analysis.style_notes,
+      suggestedSearches: queryStrings,
+      introLines: generatedCopy.introLines || [],
+      outfitRationale: generatedCopy.outfitRationale || ""
+    },
+    ai,
+    reference,
+    event: event.label,
+    style: style.label,
+    store,
+    urgency,
+    customerSizing,
+    outfit,
+    substitutions,
+    business: {
+      basketValue,
+      availableToday,
+      itemCount: outfit.length,
+      lowStockNotes: lowStock.map((product) => `${product.productDisplayName}: ${product.inventory[store]} left at ${store}`),
+      demandInsight: generatedCopy.demandInsight,
+      associatePrompt: generatedCopy.associatePrompt,
+      kpis: [
+        { label: "Projected basket", value: `$${basketValue}` },
+        { label: "Available today", value: `${availableToday}/${outfit.length}` },
+        { label: "Guardrail pass", value: `${Math.round(outfit.reduce((sum, item) => sum + item.guardrail.score, 0) / Math.max(outfit.length, 1))}%` },
+        { label: "Substitutes ready", value: substitutions.length.toString() }
+      ]
+    },
+    pipeline: [
+      "WhatsApp captures a natural-language outfit request without a starter item.",
+      ai.queryEmbeddings === "openai" ? "OpenAI embeds each outfit slot for semantic catalogue retrieval." : "Local fallback uses catalogue exemplar embeddings for each outfit slot.",
+      "RAG grounds the fresh outfit in real catalogue products.",
+      "Metadata ranking adds store inventory, budget, season, and urgency.",
+      ai.copyGeneration === "openai" ? "OpenAI writes shopper-facing styling copy for the complete outfit." : "Local fallback creates shopper-facing copy from templates."
+    ]
+  };
+  recommendation.agent = await generateAgentMission(recommendation);
+  recommendation.suggestedPrompts = await suggestFollowUpPrompts({ recommendation });
+  return recommendation;
+}
+
 const chatTools = [
   {
     type: "function",
@@ -1718,7 +2046,7 @@ const chatTools = [
   {
     type: "function",
     name: "find_alternatives",
-    description: "Search the catalog for alternatives that preserve event, inventory, budget, and starter-item context.",
+    description: "Search the catalog for alternatives that preserve event, inventory, budget, and outfit context.",
     parameters: {
       type: "object",
       properties: {
@@ -1757,6 +2085,13 @@ function currentConstraintsFromRecommendation(recommendation, payload) {
 }
 
 function summarizeForAgent(recommendation, chatState, message, constraints) {
+  const currentRequest = isFreshRecommendation(recommendation)
+    ? `Current request:
+- Complete outfit from scratch
+- ${JSON.stringify(recommendation.analysis?.structuredAttributes || {})}`
+    : `Current starter:
+- ${recommendation.reference?.productDisplayName}
+- ${JSON.stringify(recommendation.analysis?.structuredAttributes || {})}`;
   return `Customer message: ${message}
 
 Current constraints:
@@ -1765,9 +2100,7 @@ ${JSON.stringify(constraints)}
 Saved shopper sizes:
 ${customerSizingSummary(recommendation.customerSizing) || "not provided"}
 
-Current starter:
-- ${recommendation.reference?.productDisplayName}
-- ${JSON.stringify(recommendation.analysis?.structuredAttributes || {})}
+${currentRequest}
 
 Current basket:
 ${(recommendation.outfit || []).map((product) => `- id ${product.id}: ${product.productDisplayName}; role ${product.role}; ${product.articleType}; ${product.baseColour}; selected size ${sizeForProduct(product, recommendation.customerSizing) || "not applicable"}; ${product.usage}; $${product.price}; ${product.inventory?.[recommendation.store] || 0} in ${recommendation.store}; reason: ${product.why}`).join("\n")}
@@ -1937,7 +2270,9 @@ function fallbackAgentMission(recommendation) {
     riskLevel,
     riskLabel,
     availabilitySummary: `${availableToday}/${outfit.length} recommended items available today at ${store}.`,
-    styleSignal: `${recommendation?.style || "Selected"} styling anchored by ${recommendation?.reference?.productDisplayName || recommendation?.analysis?.item || "the starter item"}.`,
+    styleSignal: isFreshRecommendation(recommendation)
+      ? `${recommendation?.style || "Selected"} styling built as a complete outfit from the shopper's brief.`
+      : `${recommendation?.style || "Selected"} styling anchored by ${recommendation?.reference?.productDisplayName || recommendation?.analysis?.item || "the starter item"}.`,
     nextSteps,
     storeHandoff: recommendation?.business?.associatePrompt || "",
     businessSignal: substitutions.length
@@ -1950,6 +2285,9 @@ async function generateAgentMission(recommendation) {
   const fallback = fallbackAgentMission(recommendation);
   if (!OPENAI_API_KEY || !recommendation?.outfit?.length) return { ...fallback, source: "local" };
   try {
+    const requestLine = isFreshRecommendation(recommendation)
+      ? "Request type: complete outfit from scratch; do not imply the shopper already has a starter item."
+      : `Starter item: ${recommendation.reference?.productDisplayName || recommendation.analysis?.item}`;
     const output = await chatJson([
       {
         role: "system",
@@ -1970,7 +2308,7 @@ Store: ${recommendation.store}
 Urgency: ${urgencyLabel(recommendation.urgency)}
 Basket value: $${recommendation.business?.basketValue || 0}
 Available today: ${recommendation.business?.availableToday || 0}/${recommendation.outfit.length}
-Starter: ${recommendation.reference?.productDisplayName || recommendation.analysis?.item}
+${requestLine}
 Current rationale: ${recommendation.analysis?.outfitRationale || ""}
 Low stock: ${(recommendation.business?.lowStockNotes || []).join("; ") || "none"}
 Substitutions: ${(recommendation.substitutions || []).slice(0, 3).map((product) => `${product.productDisplayName} for ${product.forProductId}; ${inventoryCount(product, recommendation.store)} in store`).join("; ") || "none"}
@@ -2621,6 +2959,9 @@ export async function handler(req, res) {
     }
     if (req.method === "POST" && url.pathname === "/api/recommend") {
       return jsonResponse(res, 200, await recommend(await readJsonBody(req)));
+    }
+    if (req.method === "POST" && url.pathname === "/api/recommend-fresh") {
+      return jsonResponse(res, 200, await recommendFresh(await readJsonBody(req)));
     }
     if (req.method === "POST" && url.pathname === "/api/chat") {
       return jsonResponse(res, 200, await runChatAgent(await readJsonBody(req)));

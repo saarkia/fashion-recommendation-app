@@ -13,11 +13,11 @@ const WHATSAPP_SEND_SPACING_MS = Number(process.env.WHATSAPP_SEND_SPACING_MS || 
 const sessions = new Map();
 
 const demoDefaults = {
-  inspirationId: 27152,
-  eventType: "outdoor-spring-wedding",
-  stylePreference: "classic",
+  eventType: "first-day-new-job",
+  stylePreference: "minimal",
   store: "Chicago Loop",
-  budgetMax: 650,
+  budgetMax: 400,
+  gender: "Men",
   urgency: "today",
   customerSizing: {
     shirt: "M",
@@ -123,6 +123,14 @@ function compactText(value, fallback = "") {
   return String(value || fallback || "").replace(/\s+/g, " ").trim();
 }
 
+function inferBudget(message, fallback) {
+  const text = String(message || "");
+  const match = text.match(/(?:[$£]\s*(\d{2,5})|\bbudget(?:\s+is|\s+of|\s*:)?\s*[$£]?\s*(\d{2,5})|\b(?:under|below|around|about|max|maximum)\s*[$£]?\s*(\d{2,5}))/i);
+  if (!match) return fallback;
+  const value = Number(match[1] || match[2] || match[3]);
+  return Number.isFinite(value) && value >= 50 ? value : fallback;
+}
+
 function inferRecommendationPayload(message) {
   const text = String(message || "").toLowerCase();
   const payload = { ...demoDefaults, customerSizing: { ...demoDefaults.customerSizing } };
@@ -136,11 +144,21 @@ function inferRecommendationPayload(message) {
   if (/\b(comfortable|comfy|relaxed|easy)\b/.test(text)) payload.stylePreference = "comfortable";
   if (/\b(trend|bold|fashion|statement|brighter|bright)\b/.test(text)) payload.stylePreference = "trend-forward";
   if (/\b(minimal|simple|clean|understated)\b/.test(text)) payload.stylePreference = "minimal";
+  if (/\b(classic|timeless|traditional|smart)\b/.test(text)) payload.stylePreference = "classic";
+
+  if (/\b(women|woman|female|dress|heels|skirt)\b/.test(text)) payload.gender = "Women";
+  if (/\b(men|man|male|mens|men's)\b/.test(text)) payload.gender = "Men";
+
+  if (/\btomorrow\b/.test(text)) payload.urgency = "tomorrow";
+  if (/\b(this week|weekend|later)\b/.test(text)) payload.urgency = "soon";
+  if (/\b(today|tonight|now|same day)\b/.test(text)) payload.urgency = "today";
 
   if (/\bdallas\b/.test(text)) payload.store = "Dallas NorthPark";
   if (/\bnew york|herald square|nyc\b/.test(text)) payload.store = "New York Herald Square";
   if (/\bsan francisco|sf centre|sf center\b/.test(text)) payload.store = "San Francisco Centre";
   if (/\bchicago\b/.test(text)) payload.store = "Chicago Loop";
+
+  payload.budgetMax = inferBudget(message, demoDefaults.budgetMax);
 
   return payload;
 }
@@ -217,9 +235,15 @@ function absoluteImageUrl(product) {
   return "";
 }
 
+function isFreshRecommendation(recommendation = {}) {
+  return recommendation.reference?.id === "fresh-brief"
+    || recommendation.analysis?.structuredAttributes?.item_type === "Complete outfit";
+}
+
 function formatRecommendation(recommendation) {
   const event = recommendation.event || "your event";
   const starter = recommendation.reference?.productDisplayName || recommendation.analysis?.item || "your starter item";
+  const isFresh = isFreshRecommendation(recommendation);
   const business = recommendation.business || {};
   const basketValue = business.basketValue || (recommendation.outfit || []).reduce((sum, product) => sum + Number(product.price || 0), 0);
   const availableToday = business.availableToday ?? (recommendation.outfit || []).filter((product) => inventoryCount(product, recommendation.store) > 0).length;
@@ -234,7 +258,7 @@ function formatRecommendation(recommendation) {
     : "Styling notes grounded in RetailNEXT catalogue and store data.";
 
   return [
-    introLines[0] || `I built this around ${starter} for ${String(event).toLowerCase()}.`,
+    introLines[0] || (isFresh ? `I built a complete outfit for ${String(event).toLowerCase()}.` : `I built this around ${starter} for ${String(event).toLowerCase()}.`),
     introLines[1] || mission || styleSignal || `I checked the look against ${recommendation.store} availability before showing it to you.`,
     "",
     `Basket: $${basketValue} | Available today: ${availableToday}/${(recommendation.outfit || []).length} at ${recommendation.store}`,
@@ -315,7 +339,7 @@ async function buildRecommendation(from, message, session) {
   session.previewSwap = null;
   session.history.push({ role: "user", content: message });
 
-  const recommendation = await postMiraJson("/api/recommend", payload);
+  const recommendation = await postMiraJson("/api/recommend-fresh", payload);
   session.recommendation = recommendation;
   session.chatState = {
     likedProductIds: [],
@@ -361,7 +385,7 @@ async function handleAsyncMessage(from, message, session) {
     await continueChat(from, message, session);
   } catch (error) {
     console.error(error);
-    await safeSendWhatsApp(from, `Mira hit a demo issue: ${error.message}. Reply "reset" and try the wedding prompt again.`);
+    await safeSendWhatsApp(from, `Mira hit a demo issue: ${error.message}. Reply "reset" and try the full-outfit prompt again.`);
   }
 }
 
@@ -382,7 +406,7 @@ function handleImmediateCommand(from, message) {
   if (!text || text === "help") {
     return {
       handled: true,
-      response: `Message Mira with a shopping need, for example: "I need an outfit for an outdoor spring wedding". Then try "change shoes", "apply", "save", or "reset".`
+      response: `Message Mira with a shopping need, for example: "I need a full outfit for the first day of my new job. The budget is $400 and my style is minimal." Then try "change shoes", "apply", "save", or "reset".`
     };
   }
 
@@ -390,7 +414,7 @@ function handleImmediateCommand(from, message) {
     sessions.delete(from);
     return {
       handled: true,
-      response: `Mira has reset this WhatsApp demo session. Send "I need an outfit for an outdoor spring wedding" to start again.`
+      response: `Mira has reset this WhatsApp demo session. Send "I need a full outfit for the first day of my new job. The budget is $400 and my style is minimal." to start again.`
     };
   }
 
