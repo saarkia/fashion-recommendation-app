@@ -26,8 +26,38 @@ const demoDefaults = {
   }
 };
 
+const eventLabels = {
+  "first-day-new-job": "first day at a new job",
+  "holiday-party": "holiday party",
+  "business-conference": "business conference",
+  vacation: "vacation",
+  "outdoor-spring-wedding": "outdoor spring wedding"
+};
+
+const styleLabels = {
+  minimal: "minimal",
+  classic: "classic",
+  comfortable: "comfortable",
+  "trend-forward": "trend-forward"
+};
+
+const requiredIntakeFields = ["eventType", "budgetMax", "stylePreference"];
+
 function now() {
   return Date.now();
+}
+
+function createIntake() {
+  return {
+    payload: {
+      store: demoDefaults.store,
+      gender: demoDefaults.gender,
+      urgency: demoDefaults.urgency,
+      customerSizing: { ...demoDefaults.customerSizing }
+    },
+    collected: {},
+    askedFor: null
+  };
 }
 
 function pruneSessions() {
@@ -51,6 +81,7 @@ function createSession(from) {
       preferences: []
     },
     history: [],
+    intake: createIntake(),
     previewRecommendation: null,
     previewSwap: null
   };
@@ -123,44 +154,80 @@ function compactText(value, fallback = "") {
   return String(value || fallback || "").replace(/\s+/g, " ").trim();
 }
 
-function inferBudget(message, fallback) {
+function inferBudget(message, fallback = null, { allowBare = false, allowDefaultText = false } = {}) {
   const text = String(message || "");
-  const match = text.match(/(?:[$£]\s*(\d{2,5})|\bbudget(?:\s+is|\s+of|\s*:)?\s*[$£]?\s*(\d{2,5})|\b(?:under|below|around|about|max|maximum)\s*[$£]?\s*(\d{2,5}))/i);
-  if (!match) return fallback;
+  const match = text.match(/(?:[$£]\s*(\d{2,5})|\bbudget(?:\s+is|\s+of|\s*:)?\s*[$£]?\s*(\d{2,5})|\b(?:under|below|around|about|max|maximum)\s*[$£]?\s*(\d{2,5}))/i)
+    || (allowBare ? text.match(/^\s*(\d{2,5})\s*$/) : null);
+  if (!match) {
+    if (allowDefaultText && /\b(no budget|not sure|unsure|you choose|recommend|whatever)\b/i.test(text)) return demoDefaults.budgetMax;
+    return fallback;
+  }
   const value = Number(match[1] || match[2] || match[3]);
   return Number.isFinite(value) && value >= 50 ? value : fallback;
 }
 
-function inferRecommendationPayload(message) {
+function inferEventType(message) {
   const text = String(message || "").toLowerCase();
+  if (/\b(job|work|office|first day|interview|new role|new job)\b/.test(text)) return "first-day-new-job";
+  if (/\b(christmas|evening|drinks|party)\b/.test(text)) return "holiday-party";
+  if (/\b(conference|business|client|meeting|presentation)\b/.test(text)) return "business-conference";
+  if (/\b(vacation|travel|beach|trip)\b/.test(text)) return "vacation";
+  if (/\b(wedding|ceremony|garden party|spring wedding)\b/.test(text)) return "outdoor-spring-wedding";
+  return null;
+}
+
+function inferStylePreference(message, { allowDefaultText = false } = {}) {
+  const text = String(message || "").toLowerCase();
+  if (/\b(comfortable|comfy|relaxed|easy)\b/.test(text)) return "comfortable";
+  if (/\b(trend|bold|fashion|statement|brighter|bright|modern|stand out)\b/.test(text)) return "trend-forward";
+  if (/\b(minimal|simple|clean|understated|neutral|not loud)\b/.test(text)) return "minimal";
+  if (/\b(classic|timeless|traditional|smart|smart casual|professional|polished)\b/.test(text)) return "classic";
+  if (allowDefaultText && /\b(not sure|unsure|you choose|recommend|whatever)\b/.test(text)) return "classic";
+  return null;
+}
+
+function inferOptionalSlots(message) {
+  const text = String(message || "").toLowerCase();
+  const slots = {};
+
+  if (/\b(women|woman|female|dress|heels|skirt)\b/.test(text)) slots.gender = "Women";
+  if (/\b(men|man|male|mens|men's)\b/.test(text)) slots.gender = "Men";
+
+  if (/\btomorrow\b/.test(text)) slots.urgency = "tomorrow";
+  if (/\b(this week|weekend|later)\b/.test(text)) slots.urgency = "soon";
+  if (/\b(today|tonight|now|same day)\b/.test(text)) slots.urgency = "today";
+
+  if (/\bdallas\b/.test(text)) slots.store = "Dallas NorthPark";
+  if (/\bnew york|herald square|nyc\b/.test(text)) slots.store = "New York Herald Square";
+  if (/\bsan francisco|sf centre|sf center\b/.test(text)) slots.store = "San Francisco Centre";
+  if (/\bchicago\b/.test(text)) slots.store = "Chicago Loop";
+
+  return slots;
+}
+
+function inferPayloadSlots(message, { askedFor = null } = {}) {
+  const slots = inferOptionalSlots(message);
+  const eventType = inferEventType(message);
+  const stylePreference = inferStylePreference(message, { allowDefaultText: askedFor === "stylePreference" });
+  const budgetMax = inferBudget(message, null, { allowBare: askedFor === "budgetMax", allowDefaultText: askedFor === "budgetMax" });
+
+  if (eventType) slots.eventType = eventType;
+  if (stylePreference) slots.stylePreference = stylePreference;
+  if (budgetMax) slots.budgetMax = budgetMax;
+  return slots;
+}
+
+function inferRecommendationPayload(message) {
   const payload = { ...demoDefaults, customerSizing: { ...demoDefaults.customerSizing } };
+  return { ...payload, ...inferPayloadSlots(message) };
+}
 
-  if (/\b(job|work|office|first day|interview)\b/.test(text)) payload.eventType = "first-day-new-job";
-  if (/\b(party|holiday|christmas|evening|drinks)\b/.test(text)) payload.eventType = "holiday-party";
-  if (/\b(conference|business|client|meeting|presentation)\b/.test(text)) payload.eventType = "business-conference";
-  if (/\b(vacation|holiday|travel|beach|trip)\b/.test(text)) payload.eventType = "vacation";
-  if (/\b(wedding|ceremony|garden party|spring)\b/.test(text)) payload.eventType = "outdoor-spring-wedding";
+function eventLabel(eventType) {
+  return eventLabels[eventType] || "your event";
+}
 
-  if (/\b(comfortable|comfy|relaxed|easy)\b/.test(text)) payload.stylePreference = "comfortable";
-  if (/\b(trend|bold|fashion|statement|brighter|bright)\b/.test(text)) payload.stylePreference = "trend-forward";
-  if (/\b(minimal|simple|clean|understated)\b/.test(text)) payload.stylePreference = "minimal";
-  if (/\b(classic|timeless|traditional|smart)\b/.test(text)) payload.stylePreference = "classic";
-
-  if (/\b(women|woman|female|dress|heels|skirt)\b/.test(text)) payload.gender = "Women";
-  if (/\b(men|man|male|mens|men's)\b/.test(text)) payload.gender = "Men";
-
-  if (/\btomorrow\b/.test(text)) payload.urgency = "tomorrow";
-  if (/\b(this week|weekend|later)\b/.test(text)) payload.urgency = "soon";
-  if (/\b(today|tonight|now|same day)\b/.test(text)) payload.urgency = "today";
-
-  if (/\bdallas\b/.test(text)) payload.store = "Dallas NorthPark";
-  if (/\bnew york|herald square|nyc\b/.test(text)) payload.store = "New York Herald Square";
-  if (/\bsan francisco|sf centre|sf center\b/.test(text)) payload.store = "San Francisco Centre";
-  if (/\bchicago\b/.test(text)) payload.store = "Chicago Loop";
-
-  payload.budgetMax = inferBudget(message, demoDefaults.budgetMax);
-
-  return payload;
+function styleLabel(stylePreference) {
+  return styleLabels[stylePreference] || "your style";
 }
 
 async function postMiraJson(path, body) {
@@ -332,8 +399,99 @@ function chatConstraints(session) {
   };
 }
 
-async function buildRecommendation(from, message, session) {
-  const payload = inferRecommendationPayload(message);
+function ensureIntake(session) {
+  if (!session.intake) session.intake = createIntake();
+  if (!session.intake.payload) session.intake.payload = createIntake().payload;
+  if (!session.intake.collected) session.intake.collected = {};
+  return session.intake;
+}
+
+function isGreetingOnly(message) {
+  return /^(hi|hello|hey|hiya|yo|start|morning|afternoon|evening|good morning|good afternoon|good evening)$/i.test(compactText(message));
+}
+
+function intakeIntroPrompt() {
+  return [
+    "Hi, I’m Mira, RetailNEXT’s stylist. I can build a complete outfit from the catalogue, keep it inside budget, check store availability, and send the pieces with images here.",
+    "",
+    "What event or moment are you dressing for? For example: first day at a new job, outdoor wedding, business conference, holiday party, or vacation."
+  ].join("\n");
+}
+
+function intakeQuestion(field, intake) {
+  const payload = intake.payload || {};
+  if (field === "eventType") return intakeIntroPrompt();
+  if (field === "budgetMax") {
+    return `Got it — ${eventLabel(payload.eventType)}. What budget should I keep the full outfit under? For example: $400.`;
+  }
+  if (field === "stylePreference") {
+    const budget = payload.budgetMax ? `$${payload.budgetMax}` : "that budget";
+    return `Great, I’ll keep it under ${budget}. What style direction do you want: minimal, classic, comfortable, or trend-forward?`;
+  }
+  return intakeIntroPrompt();
+}
+
+function applyIntakeSlots(session, message) {
+  const intake = ensureIntake(session);
+  const slots = inferPayloadSlots(message, { askedFor: intake.askedFor });
+  for (const [key, value] of Object.entries(slots)) {
+    intake.payload[key] = value;
+    if (requiredIntakeFields.includes(key)) intake.collected[key] = true;
+  }
+  session.updatedAt = now();
+  return slots;
+}
+
+function nextMissingIntakeField(intake) {
+  return requiredIntakeFields.find((field) => !intake.collected[field]);
+}
+
+function finaliseIntakePayload(intake) {
+  return {
+    ...demoDefaults,
+    ...intake.payload,
+    customerSizing: {
+      ...demoDefaults.customerSizing,
+      ...(intake.payload.customerSizing || {})
+    }
+  };
+}
+
+function readyToRecommendPrompt(payload) {
+  return [
+    `Perfect — I’ve got ${eventLabel(payload.eventType)}, ${styleLabel(payload.stylePreference)}, and a $${payload.budgetMax} budget.`,
+    `Mira is checking the RetailNEXT catalogue, budget and ${payload.store} availability now.`
+  ].join("\n");
+}
+
+function handleIntakeMessage(session, message) {
+  const intake = ensureIntake(session);
+  const slots = applyIntakeSlots(session, message);
+  const hasUsefulSlot = Object.keys(slots).some((key) => requiredIntakeFields.includes(key) || ["store", "gender", "urgency"].includes(key));
+
+  if (!hasUsefulSlot && isGreetingOnly(message)) {
+    intake.askedFor = "eventType";
+    return { action: "ask", response: intakeIntroPrompt() };
+  }
+
+  const missing = nextMissingIntakeField(intake);
+  if (missing) {
+    intake.askedFor = missing;
+    return { action: "ask", response: intakeQuestion(missing, intake) };
+  }
+
+  const payload = finaliseIntakePayload(intake);
+  session.recommendationPayload = payload;
+  intake.askedFor = null;
+  return {
+    action: "build",
+    payload,
+    response: readyToRecommendPrompt(payload)
+  };
+}
+
+async function buildRecommendation(from, message, session, recommendationPayload = null) {
+  const payload = recommendationPayload || session.recommendationPayload || inferRecommendationPayload(message);
   session.recommendationPayload = payload;
   session.previewRecommendation = null;
   session.previewSwap = null;
@@ -376,10 +534,10 @@ async function continueChat(from, message, session) {
   await safeSendWhatsApp(from, formatChatResult(data));
 }
 
-async function handleAsyncMessage(from, message, session) {
+async function handleAsyncMessage(from, message, session, recommendationPayload = null) {
   try {
     if (!session.recommendation) {
-      await buildRecommendation(from, message, session);
+      await buildRecommendation(from, message, session, recommendationPayload);
       return;
     }
     await continueChat(from, message, session);
@@ -406,7 +564,7 @@ function handleImmediateCommand(from, message) {
   if (!text || text === "help") {
     return {
       handled: true,
-      response: `Message Mira with a shopping need, for example: "I need a full outfit for the first day of my new job. The budget is $400 and my style is minimal." Then try "change shoes", "apply", "save", or "reset".`
+      response: intakeIntroPrompt()
     };
   }
 
@@ -414,7 +572,7 @@ function handleImmediateCommand(from, message) {
     sessions.delete(from);
     return {
       handled: true,
-      response: `Mira has reset this WhatsApp demo session. Send "I need a full outfit for the first day of my new job. The budget is $400 and my style is minimal." to start again.`
+      response: `Mira has reset this WhatsApp demo session.\n\n${intakeIntroPrompt()}`
     };
   }
 
@@ -455,6 +613,14 @@ export async function handleTwilioWebhook(req, res, { schedule = (promise) => { 
   if (command.handled) return sendXml(res, command.response);
 
   const session = command.session || getSession(from);
+  if (!session.recommendation) {
+    const intake = handleIntakeMessage(session, message);
+    if (intake.action === "ask") return sendXml(res, intake.response);
+    sendXml(res, intake.response);
+    schedule(handleAsyncMessage(from, message, session, intake.payload));
+    return;
+  }
+
   const ack = session.recommendation
     ? "Mira is checking the current outfit against the RetailNEXT catalogue and store availability."
     : "Mira is checking the RetailNEXT catalogue, budget and store availability now.";
