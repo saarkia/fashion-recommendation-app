@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { pathToFileURL } from "node:url";
+import { del, get, put } from "@vercel/blob";
 
 const PORT = Number(process.env.WHATSAPP_BRIDGE_PORT || 4190);
 const MIRA_BASE_URL = (process.env.MIRA_BASE_URL || "https://fashion-recommendation-app.vercel.app").replace(/\/$/, "");
@@ -9,6 +10,8 @@ const TWILIO_WHATSAPP_FROM = process.env.TWILIO_WHATSAPP_FROM || "whatsapp:+1415
 const TWILIO_API_BASE = "https://api.twilio.com/2010-04-01";
 const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const WHATSAPP_SEND_SPACING_MS = Number(process.env.WHATSAPP_SEND_SPACING_MS || 1300);
+const BLOB_READ_WRITE_TOKEN = process.env.BLOB_READ_WRITE_TOKEN || "";
+const SESSION_BLOB_PREFIX = "whatsapp/sessions";
 
 const sessions = new Map();
 
@@ -89,11 +92,92 @@ function createSession(from) {
   return session;
 }
 
-function getSession(from) {
+function normalizeSession(session, from) {
+  return {
+    ...createSession(from),
+    ...(session || {}),
+    from,
+    chatState: {
+      likedProductIds: [],
+      dislikedProductIds: [],
+      lockedProductIds: [],
+      preferences: [],
+      ...(session?.chatState || {})
+    },
+    history: Array.isArray(session?.history) ? session.history.slice(-12) : [],
+    intake: {
+      ...createIntake(),
+      ...(session?.intake || {}),
+      payload: {
+        ...createIntake().payload,
+        ...(session?.intake?.payload || {})
+      },
+      collected: {
+        ...(session?.intake?.collected || {})
+      }
+    }
+  };
+}
+
+function sessionBlobPath(from) {
+  const id = Buffer.from(String(from)).toString("base64url");
+  return `${SESSION_BLOB_PREFIX}/${id}.json`;
+}
+
+function getMemorySession(from) {
   pruneSessions();
   const session = sessions.get(from) || createSession(from);
   session.updatedAt = now();
   return session;
+}
+
+async function loadSession(from) {
+  pruneSessions();
+  if (!BLOB_READ_WRITE_TOKEN) return getMemorySession(from);
+
+  try {
+    const blob = await get(sessionBlobPath(from), {
+      access: "private",
+      useCache: false,
+      token: BLOB_READ_WRITE_TOKEN
+    });
+    if (!blob) return createSession(from);
+    const text = await new Response(blob.stream).text();
+    const session = normalizeSession(JSON.parse(text), from);
+    if ((session.updatedAt || session.createdAt || 0) < now() - SESSION_TTL_MS) {
+      await deleteSession(from);
+      return createSession(from);
+    }
+    session.updatedAt = now();
+    sessions.set(from, session);
+    return session;
+  } catch (error) {
+    console.warn(`Using in-memory WhatsApp session: ${error.message}`);
+    return getMemorySession(from);
+  }
+}
+
+async function saveSession(session) {
+  session.updatedAt = now();
+  sessions.set(session.from, session);
+  if (!BLOB_READ_WRITE_TOKEN) return;
+  await put(sessionBlobPath(session.from), JSON.stringify(session), {
+    access: "private",
+    contentType: "application/json; charset=utf-8",
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    token: BLOB_READ_WRITE_TOKEN
+  });
+}
+
+async function deleteSession(from) {
+  sessions.delete(from);
+  if (!BLOB_READ_WRITE_TOKEN) return;
+  try {
+    await del(sessionBlobPath(from), { token: BLOB_READ_WRITE_TOKEN });
+  } catch (error) {
+    console.warn(`Could not delete WhatsApp session: ${error.message}`);
+  }
 }
 
 function escapeXml(value) {
@@ -507,6 +591,7 @@ async function buildRecommendation(from, message, session, recommendationPayload
   };
   session.history.push({ role: "assistant", content: "Mira generated a RetailNEXT outfit recommendation." });
   session.updatedAt = now();
+  await saveSession(session);
 
   await sendRecommendationMessages(from, recommendation);
 }
@@ -530,6 +615,7 @@ async function continueChat(from, message, session) {
     session.previewRecommendation = data.previewRecommendation;
     session.previewSwap = data.previewSwap || null;
   }
+  await saveSession(session);
 
   await safeSendWhatsApp(from, formatChatResult(data));
 }
@@ -557,9 +643,8 @@ function applyPreview(session) {
   return swap;
 }
 
-function handleImmediateCommand(from, message) {
+async function handleImmediateCommand(session, message) {
   const text = String(message || "").trim().toLowerCase();
-  const session = getSession(from);
 
   if (!text || text === "help") {
     return {
@@ -569,7 +654,7 @@ function handleImmediateCommand(from, message) {
   }
 
   if (text === "reset" || text === "start over") {
-    sessions.delete(from);
+    await deleteSession(session.from);
     return {
       handled: true,
       response: `Mira has reset this WhatsApp demo session.\n\n${intakeIntroPrompt()}`
@@ -587,6 +672,7 @@ function handleImmediateCommand(from, message) {
     const swapLine = swap?.from && swap?.to
       ? ` Updated ${swap.from.productDisplayName} to ${swap.to.productDisplayName}.`
       : "";
+    await saveSession(session);
     return {
       handled: true,
       response: `Done. Mira updated the WhatsApp outfit preview and kept the basket grounded in RetailNEXT inventory.${swapLine}`
@@ -609,12 +695,13 @@ export async function handleTwilioWebhook(req, res, { schedule = (promise) => { 
   const message = compactText(form.Body);
   if (!from) return sendXml(res, "Mira could not identify the WhatsApp sender.");
 
-  const command = handleImmediateCommand(from, message);
+  const session = await loadSession(from);
+  const command = await handleImmediateCommand(session, message);
   if (command.handled) return sendXml(res, command.response);
 
-  const session = command.session || getSession(from);
   if (!session.recommendation) {
     const intake = handleIntakeMessage(session, message);
+    await saveSession(session);
     if (intake.action === "ask") return sendXml(res, intake.response);
     sendXml(res, intake.response);
     schedule(handleAsyncMessage(from, message, session, intake.payload));
