@@ -3,7 +3,9 @@ import { readFile, stat } from "node:fs/promises";
 import { createReadStream, existsSync } from "node:fs";
 import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { waitUntil } from "@vercel/functions";
 import { get, put } from "@vercel/blob";
+import { handleTwilioWebhook } from "../scripts/whatsapp-bridge.mjs";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const root = resolve(__dirname, "..");
@@ -2585,6 +2587,12 @@ export async function handler(req, res) {
         textVerbosity: OPENAI_TEXT_VERBOSITY,
         inspiration: pickInspiration()
       });
+    }
+    if (req.method === "GET" && url.pathname === "/api/whatsapp/health") {
+      return jsonResponse(res, 200, { ok: true });
+    }
+    if (req.method === "POST" && url.pathname === "/api/whatsapp/twilio") {
+      return handleTwilioWebhook(req, res, { schedule: waitUntil });
     }
     if (req.method === "GET" && url.pathname === "/api/briefing-content") {
       const result = await getBriefingContent();

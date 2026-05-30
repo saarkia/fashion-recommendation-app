@@ -8,9 +8,11 @@
     "eval": "node scripts/eval.mjs",
     "qa:refinement": "node scripts/refinement-qa.mjs",
     "render:briefing-pdf": "node scripts/render_briefing_pdf.mjs",
-    "start": "node server/index.mjs"
+    "start": "node server/index.mjs",
+    "whatsapp:bridge": "node scripts/whatsapp-bridge.mjs"
   },
   "dependencies": {
-    "@vercel/blob": "^2.4.0"
+    "@vercel/blob": "^2.4.0",
+    "@vercel/functions": "^3.6.1"
   }
 }
