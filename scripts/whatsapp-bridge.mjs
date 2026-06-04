@@ -13,6 +13,7 @@ const TWILIO_TYPING_API_URL = "https://messaging.twilio.com/v2/Indicators/Typing
 const TWILIO_TYPING_INDICATORS_ENABLED = process.env.TWILIO_TYPING_INDICATORS_ENABLED !== "false";
 const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const WHATSAPP_SEND_SPACING_MS = Number(process.env.WHATSAPP_SEND_SPACING_MS || 1300);
+const WHATSAPP_FAST_REPLY_TYPING_DELAY_MS = Number(process.env.WHATSAPP_FAST_REPLY_TYPING_DELAY_MS || 650);
 const BLOB_READ_WRITE_TOKEN = process.env.BLOB_READ_WRITE_TOKEN || "";
 const SESSION_BLOB_PREFIX = "whatsapp/sessions";
 const WHATSAPP_RECOMMENDATION_CARD_LIMIT = Number(process.env.WHATSAPP_RECOMMENDATION_CARD_LIMIT || 4);
@@ -627,6 +628,14 @@ function safeSendTypingIndicator(messageSid) {
   });
 }
 
+async function showTypingForFastReply(messageSid, { start = true } = {}) {
+  if (!messageSid) return;
+  if (start) safeSendTypingIndicator(messageSid);
+  if (WHATSAPP_FAST_REPLY_TYPING_DELAY_MS > 0) {
+    await sleep(WHATSAPP_FAST_REPLY_TYPING_DELAY_MS);
+  }
+}
+
 async function safeSendWhatsApp(to, body, options = {}) {
   try {
     return await sendWhatsApp(to, body, options);
@@ -1128,13 +1137,15 @@ export async function handleTwilioWebhook(req, res, { schedule = (promise) => { 
   if (!session.recommendation) {
     if (isRecommendationPending(session)) {
       await saveSession(session);
+      await showTypingForFastReply(messageSid);
       return sendXml(res, recommendationPendingMessage(session));
     }
 
-    if (!isGreetingOnly(message)) safeSendTypingIndicator(messageSid);
+    safeSendTypingIndicator(messageSid);
     const intake = await handleIntakeMessage(session, message);
     if (intake.action === "ask") {
       await saveSession(session);
+      await showTypingForFastReply(messageSid, { start: false });
       return sendXml(res, intake.response);
     }
     markRecommendationPending(session, intake.payload);
