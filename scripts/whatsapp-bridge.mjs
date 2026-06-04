@@ -15,6 +15,7 @@ const BLOB_READ_WRITE_TOKEN = process.env.BLOB_READ_WRITE_TOKEN || "";
 const SESSION_BLOB_PREFIX = "whatsapp/sessions";
 const WHATSAPP_RECOMMENDATION_CARD_LIMIT = Number(process.env.WHATSAPP_RECOMMENDATION_CARD_LIMIT || 4);
 const WHATSAPP_DRY_RUN_OUTBOX = process.env.WHATSAPP_DRY_RUN_OUTBOX || "";
+const RECOMMENDATION_PENDING_TTL_MS = Number(process.env.WHATSAPP_RECOMMENDATION_PENDING_TTL_MS || 2 * 60 * 1000);
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_MODEL_FAST = process.env.OPENAI_MODEL_FAST || process.env.OPENAI_MODEL || "gpt-5.4-nano";
 const OPENAI_TEXT_VERBOSITY = process.env.OPENAI_TEXT_VERBOSITY || "low";
@@ -106,6 +107,7 @@ function createSession(from, to = "") {
     },
     history: [],
     intake: createIntake(),
+    recommendationPending: null,
     previewRecommendation: null,
     previewSwap: null
   };
@@ -123,6 +125,7 @@ function normalizeSession(session, from, to = "") {
     updatedAt: now(),
     recommendation: null,
     recommendationPayload: null,
+    recommendationPending: null,
     previewRecommendation: null,
     previewSwap: null,
     ...(session || {}),
@@ -843,7 +846,8 @@ function intakeAskResponse(field, intake, aiMessage = "", { retry = false } = {}
 
 function intakeReadyResponse(payload, aiMessage = "") {
   const text = compactText(aiMessage);
-  if (/\b(checking|catalogue|availability|retailnext)\b/i.test(text)) return text;
+  const asksFollowUp = /\?|\b(anything specific|do you want|would you like|or just|need from me|changes? to)\b/i.test(text);
+  if (!asksFollowUp && /\b(checking|catalogue|availability|retailnext)\b/i.test(text)) return text;
   return readyToRecommendPrompt(payload);
 }
 
@@ -931,12 +935,17 @@ async function handleIntakeMessage(session, message) {
 async function buildRecommendation(from, message, session, recommendationPayload = null) {
   const payload = recommendationPayload || session.recommendationPayload || inferRecommendationPayload(message);
   session.recommendationPayload = payload;
+  session.recommendationPending = {
+    startedAt: now(),
+    payload
+  };
   session.previewRecommendation = null;
   session.previewSwap = null;
   session.history.push({ role: "user", content: message });
 
   const recommendation = await postMiraJson("/api/recommend-fresh", payload);
   session.recommendation = recommendation;
+  session.recommendationPending = null;
   session.chatState = {
     likedProductIds: [],
     dislikedProductIds: [],
@@ -983,8 +992,32 @@ async function handleAsyncMessage(from, message, session, recommendationPayload 
     await continueChat(from, message, session);
   } catch (error) {
     console.error(error);
+    session.recommendationPending = null;
+    await saveSession(session);
     await safeSendWhatsApp(from, `Mira hit a demo issue: ${error.message}. Reply "reset" and try the full-outfit prompt again.`);
   }
+}
+
+function markRecommendationPending(session, payload) {
+  session.recommendationPending = {
+    startedAt: now(),
+    payload
+  };
+  session.updatedAt = now();
+}
+
+function isRecommendationPending(session) {
+  if (!session?.recommendationPending || session.recommendation) return false;
+  const startedAt = Number(session.recommendationPending.startedAt || 0);
+  const pending = startedAt > 0 && now() - startedAt < RECOMMENDATION_PENDING_TTL_MS;
+  if (!pending) session.recommendationPending = null;
+  return pending;
+}
+
+function recommendationPendingMessage(session) {
+  const payload = session.recommendationPending?.payload || session.recommendationPayload || {};
+  const store = payload.store || demoDefaults.store;
+  return `Mira is already checking the RetailNEXT catalogue and ${store} availability. I’ll send the outfit here as soon as it’s ready.`;
 }
 
 function applyPreview(session) {
@@ -1055,9 +1088,18 @@ export async function handleTwilioWebhook(req, res, { schedule = (promise) => { 
   if (command.handled) return sendXml(res, command.response);
 
   if (!session.recommendation) {
+    if (isRecommendationPending(session)) {
+      await saveSession(session);
+      return sendXml(res, recommendationPendingMessage(session));
+    }
+
     const intake = await handleIntakeMessage(session, message);
+    if (intake.action === "ask") {
+      await saveSession(session);
+      return sendXml(res, intake.response);
+    }
+    markRecommendationPending(session, intake.payload);
     await saveSession(session);
-    if (intake.action === "ask") return sendXml(res, intake.response);
     sendXml(res, intake.response);
     schedule(handleAsyncMessage(from, message, session, intake.payload));
     return;
