@@ -309,6 +309,15 @@ function responseText(payload) {
   return texts.join("\n").trim();
 }
 
+function cleanAssistantMessage(text) {
+  return compactText(text)
+    .replace(/\beventType\b/gi, "occasion")
+    .replace(/\bbudgetMax\b/gi, "budget")
+    .replace(/\bstylePreference\b/gi, "style direction")
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "")
+    .trim();
+}
+
 async function openaiFetch(path, body) {
   if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not set");
   const controller = new AbortController();
@@ -474,6 +483,8 @@ Rules:
 - If the message is rubbish, keyboard smash, or unrelated, set intent to nonsense or off_topic, keep slots empty, and politely ask the next missing required field.
 - If the user asks what Mira can do, set intent to help and briefly explain the outfit service before asking the next missing required field.
 - Do not claim a recommendation exists until all required fields are known.
+- Do not mention internal schema names like eventType, budgetMax, stylePreference, slots, payload, or fields.
+- Do not use emoji.
 - Keep assistantMessage brief and conversational for WhatsApp, but always end with a clear question if required fields are missing.
 - If a required field is still missing after applying slots, assistantMessage should ask only for the next missing field.
 - If all required fields are known, assistantMessage should briefly confirm and say Mira is checking the RetailNEXT catalogue and store availability.`
@@ -493,7 +504,7 @@ Rules:
     ]);
     return {
       slots: sanitizeIntakeSlots(result.slots || result),
-      assistantMessage: compactText(result.assistantMessage),
+      assistantMessage: cleanAssistantMessage(result.assistantMessage),
       intent: compactText(result.intent, "intake"),
       confidence: Number(result.confidence || 0)
     };
@@ -770,7 +781,12 @@ function intakeIntroPrompt() {
 
 function intakeQuestion(field, intake) {
   const payload = intake.payload || {};
-  if (field === "eventType") return intakeIntroPrompt();
+  if (field === "eventType") {
+    if (payload.budgetMax) {
+      return `Got it — I’ll keep it under $${payload.budgetMax}. What event or moment are you dressing for? For example: first day at a new job, outdoor wedding, business conference, holiday party, or vacation.`;
+    }
+    return intakeIntroPrompt();
+  }
   if (field === "budgetMax") {
     return `Got it — ${eventLabel(payload.eventType)}. What budget should I keep the full outfit under? For example: $400.`;
   }
@@ -784,6 +800,9 @@ function intakeQuestion(field, intake) {
 function intakeRetryQuestion(field, intake) {
   const payload = intake.payload || {};
   if (field === "eventType") {
+    if (payload.budgetMax) {
+      return `Got it — I’ll keep it under $${payload.budgetMax}. What event or moment are you dressing for?`;
+    }
     return "I didn’t catch the occasion yet. What are you dressing for? For example: first day at a new job, outdoor wedding, business conference, holiday party, or vacation.";
   }
   if (field === "budgetMax") {
