@@ -65,14 +65,21 @@ function createIntake() {
 
 function pruneSessions() {
   const cutoff = now() - SESSION_TTL_MS;
-  for (const [from, session] of sessions.entries()) {
-    if ((session.updatedAt || session.createdAt || 0) < cutoff) sessions.delete(from);
+  for (const [key, session] of sessions.entries()) {
+    if ((session.updatedAt || session.createdAt || 0) < cutoff) sessions.delete(key);
   }
 }
 
-function createSession(from) {
+function sessionKey(from, to = "") {
+  return `${compactText(to, "unknown-to")}|${compactText(from, "unknown-from")}`;
+}
+
+function createSession(from, to = "") {
+  const key = sessionKey(from, to);
   const session = {
+    sessionKey: key,
     from,
+    to,
     createdAt: now(),
     updatedAt: now(),
     recommendation: null,
@@ -88,15 +95,26 @@ function createSession(from) {
     previewRecommendation: null,
     previewSwap: null
   };
-  sessions.set(from, session);
+  sessions.set(key, session);
   return session;
 }
 
-function normalizeSession(session, from) {
+function normalizeSession(session, from, to = "") {
+  const key = sessionKey(from, to);
   return {
-    ...createSession(from),
+    sessionKey: key,
+    from,
+    to,
+    createdAt: now(),
+    updatedAt: now(),
+    recommendation: null,
+    recommendationPayload: null,
+    previewRecommendation: null,
+    previewSwap: null,
     ...(session || {}),
     from,
+    to,
+    sessionKey: key,
     chatState: {
       likedProductIds: [],
       dislikedProductIds: [],
@@ -119,49 +137,53 @@ function normalizeSession(session, from) {
   };
 }
 
-function sessionBlobPath(from) {
-  const id = Buffer.from(String(from)).toString("base64url");
+function sessionBlobPath(key) {
+  const id = Buffer.from(String(key)).toString("base64url");
   return `${SESSION_BLOB_PREFIX}/${id}.json`;
 }
 
-function getMemorySession(from) {
+function getMemorySession(from, to = "") {
   pruneSessions();
-  const session = sessions.get(from) || createSession(from);
+  const key = sessionKey(from, to);
+  const session = sessions.get(key) || createSession(from, to);
   session.updatedAt = now();
   return session;
 }
 
-async function loadSession(from) {
+async function loadSession(from, to = "") {
   pruneSessions();
-  if (!BLOB_READ_WRITE_TOKEN) return getMemorySession(from);
+  const key = sessionKey(from, to);
+  if (!BLOB_READ_WRITE_TOKEN) return getMemorySession(from, to);
 
   try {
-    const blob = await get(sessionBlobPath(from), {
+    const blob = await get(sessionBlobPath(key), {
       access: "private",
       useCache: false,
       token: BLOB_READ_WRITE_TOKEN
     });
-    if (!blob) return createSession(from);
+    if (!blob) return createSession(from, to);
     const text = await new Response(blob.stream).text();
-    const session = normalizeSession(JSON.parse(text), from);
+    const session = normalizeSession(JSON.parse(text), from, to);
     if ((session.updatedAt || session.createdAt || 0) < now() - SESSION_TTL_MS) {
-      await deleteSession(from);
-      return createSession(from);
+      await deleteSession(session);
+      return createSession(from, to);
     }
     session.updatedAt = now();
-    sessions.set(from, session);
+    sessions.set(key, session);
     return session;
   } catch (error) {
     console.warn(`Using in-memory WhatsApp session: ${error.message}`);
-    return getMemorySession(from);
+    return getMemorySession(from, to);
   }
 }
 
 async function saveSession(session) {
   session.updatedAt = now();
-  sessions.set(session.from, session);
+  const key = session.sessionKey || sessionKey(session.from, session.to);
+  session.sessionKey = key;
+  sessions.set(key, session);
   if (!BLOB_READ_WRITE_TOKEN) return;
-  await put(sessionBlobPath(session.from), JSON.stringify(session), {
+  await put(sessionBlobPath(key), JSON.stringify(session), {
     access: "private",
     contentType: "application/json; charset=utf-8",
     addRandomSuffix: false,
@@ -170,11 +192,14 @@ async function saveSession(session) {
   });
 }
 
-async function deleteSession(from) {
-  sessions.delete(from);
+async function deleteSession(sessionOrFrom, to = "") {
+  const key = typeof sessionOrFrom === "object"
+    ? sessionOrFrom.sessionKey || sessionKey(sessionOrFrom.from, sessionOrFrom.to)
+    : sessionKey(sessionOrFrom, to);
+  sessions.delete(key);
   if (!BLOB_READ_WRITE_TOKEN) return;
   try {
-    await del(sessionBlobPath(from), { token: BLOB_READ_WRITE_TOKEN });
+    await del(sessionBlobPath(key), { token: BLOB_READ_WRITE_TOKEN });
   } catch (error) {
     console.warn(`Could not delete WhatsApp session: ${error.message}`);
   }
@@ -647,7 +672,7 @@ async function handleImmediateCommand(session, message) {
   }
 
   if (text === "reset" || text === "start over") {
-    await deleteSession(session.from);
+    await deleteSession(session);
     return {
       handled: true,
       response: `Mira has reset this WhatsApp demo session.\n\n${intakeIntroPrompt()}`
@@ -685,10 +710,11 @@ async function handleImmediateCommand(session, message) {
 export async function handleTwilioWebhook(req, res, { schedule = (promise) => { void promise; } } = {}) {
   const form = await readTwilioForm(req);
   const from = compactText(form.From);
+  const to = compactText(form.To, TWILIO_WHATSAPP_FROM);
   const message = compactText(form.Body);
   if (!from) return sendXml(res, "Mira could not identify the WhatsApp sender.");
 
-  const session = await loadSession(from);
+  const session = await loadSession(from, to);
   const command = await handleImmediateCommand(session, message);
   if (command.handled) return sendXml(res, command.response);
 
