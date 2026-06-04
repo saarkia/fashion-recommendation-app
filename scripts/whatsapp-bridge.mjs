@@ -12,6 +12,11 @@ const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const WHATSAPP_SEND_SPACING_MS = Number(process.env.WHATSAPP_SEND_SPACING_MS || 1300);
 const BLOB_READ_WRITE_TOKEN = process.env.BLOB_READ_WRITE_TOKEN || "";
 const SESSION_BLOB_PREFIX = "whatsapp/sessions";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+const OPENAI_MODEL_FAST = process.env.OPENAI_MODEL_FAST || process.env.OPENAI_MODEL || "gpt-5.4-nano";
+const OPENAI_TEXT_VERBOSITY = process.env.OPENAI_TEXT_VERBOSITY || "low";
+const OPENAI_REASONING_EFFORT_FAST = process.env.OPENAI_REASONING_EFFORT_FAST || process.env.OPENAI_REASONING_EFFORT || "low";
+const OPENAI_TIMEOUT_MS = Number(process.env.WHATSAPP_INTAKE_OPENAI_TIMEOUT_MS || process.env.OPENAI_TIMEOUT_MS || 8000);
 
 const sessions = new Map();
 
@@ -45,6 +50,11 @@ const styleLabels = {
 };
 
 const requiredIntakeFields = ["eventType", "budgetMax", "stylePreference"];
+const allowedEventTypes = new Set(Object.keys(eventLabels));
+const allowedStylePreferences = new Set(Object.keys(styleLabels));
+const allowedGenders = new Set(["Men", "Women", "Unisex"]);
+const allowedUrgencies = new Set(["today", "tomorrow", "soon"]);
+const allowedStores = new Set(["Chicago Loop", "Dallas NorthPark", "New York Herald Square", "San Francisco Centre"]);
 
 function now() {
   return Date.now();
@@ -263,10 +273,90 @@ function compactText(value, fallback = "") {
   return String(value || fallback || "").replace(/\s+/g, " ").trim();
 }
 
+function cleanJson(text) {
+  const trimmed = String(text || "").trim();
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return JSON.parse(fenced ? fenced[1] : trimmed || "{}");
+}
+
+function isGpt5Family(model = "") {
+  return /^gpt-5(?:[.\-]|$)/.test(String(model));
+}
+
+function toResponsesInput(messages) {
+  return messages.map((message) => ({
+    ...message,
+    content: Array.isArray(message.content)
+      ? message.content.map((part) => part?.type === "text" ? { type: "input_text", text: part.text || "" } : part)
+      : message.content
+  }));
+}
+
+function responseText(payload) {
+  if (payload?.output_text) return payload.output_text;
+  const texts = [];
+  for (const item of payload?.output || []) {
+    for (const content of item.content || []) {
+      if (content.type === "output_text" && content.text) texts.push(content.text);
+      if (content.type === "text" && content.text) texts.push(content.text);
+    }
+  }
+  return texts.join("\n").trim();
+}
+
+async function openaiFetch(path, body) {
+  if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not set");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+  try {
+    const response = await fetch(`https://api.openai.com/v1${path}`, {
+      method: "POST",
+      headers: {
+        "authorization": `Bearer ${OPENAI_API_KEY}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error?.message || `${response.status} ${response.statusText}`);
+    }
+    return payload;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function chatJson(messages, maxTokens = 650, model = OPENAI_MODEL_FAST) {
+  if (isGpt5Family(model)) {
+    const payload = await openaiFetch("/responses", {
+      model,
+      input: toResponsesInput(messages),
+      max_output_tokens: maxTokens,
+      text: {
+        verbosity: OPENAI_TEXT_VERBOSITY,
+        format: { type: "json_object" }
+      },
+      reasoning: { effort: OPENAI_REASONING_EFFORT_FAST }
+    });
+    return cleanJson(responseText(payload));
+  }
+
+  const payload = await openaiFetch("/chat/completions", {
+    model,
+    messages,
+    response_format: { type: "json_object" },
+    temperature: 0.1,
+    max_tokens: maxTokens
+  });
+  return cleanJson(payload.choices?.[0]?.message?.content || "{}");
+}
+
 function inferBudget(message, fallback = null, { allowBare = false, allowDefaultText = false } = {}) {
   const text = String(message || "");
   const match = text.match(/(?:[$£]\s*(\d{2,5})|\bbudget(?:\s+is|\s+of|\s*:)?\s*[$£]?\s*(\d{2,5})|\b(?:under|below|around|about|max|maximum)\s*[$£]?\s*(\d{2,5}))/i)
-    || (allowBare ? text.match(/^\s*(\d{2,5})\s*$/) : null);
+    || (allowBare ? text.match(/\b(\d{2,5})\b/) : null);
   if (!match) {
     if (allowDefaultText && /\b(no budget|not sure|unsure|you choose|recommend|whatever)\b/i.test(text)) return demoDefaults.budgetMax;
     return fallback;
@@ -324,6 +414,79 @@ function inferPayloadSlots(message, { askedFor = null } = {}) {
   if (stylePreference) slots.stylePreference = stylePreference;
   if (budgetMax) slots.budgetMax = budgetMax;
   return slots;
+}
+
+function sanitizeIntakeSlots(slots = {}) {
+  const clean = {};
+  if (allowedEventTypes.has(slots.eventType)) clean.eventType = slots.eventType;
+  if (allowedStylePreferences.has(slots.stylePreference)) clean.stylePreference = slots.stylePreference;
+  if (allowedGenders.has(slots.gender)) clean.gender = slots.gender;
+  if (allowedUrgencies.has(slots.urgency)) clean.urgency = slots.urgency;
+  if (allowedStores.has(slots.store)) clean.store = slots.store;
+  const budget = Number(slots.budgetMax);
+  if (Number.isFinite(budget) && budget >= 50 && budget <= 10000) clean.budgetMax = Math.round(budget);
+  return clean;
+}
+
+async function interpretIntakeWithOpenAI(session, message, fallbackSlots = {}) {
+  if (!OPENAI_API_KEY) return null;
+  const intake = ensureIntake(session);
+  try {
+    const result = await chatJson([
+      {
+        role: "system",
+        content: `You are Mira's WhatsApp intake interpreter for RetailNEXT.
+Return only valid JSON. Extract shopping constraints from natural language, including short follow-up replies.
+
+Allowed eventType values:
+- first-day-new-job: first day at work, new job, interview, office start, first day in a role
+- outdoor-spring-wedding: wedding, ceremony, garden party, spring wedding
+- holiday-party: party, Christmas party, evening drinks
+- business-conference: conference, client meeting, business presentation
+- vacation: holiday, travel, beach, trip
+
+Allowed stylePreference values:
+- minimal: simple, clean, neutral, understated, not flashy
+- classic: timeless, smart, polished, professional, traditional
+- comfortable: comfy, relaxed, easy, practical
+- trend-forward: bold, statement, fashionable, modern, stand out
+
+Allowed store values: Chicago Loop, Dallas NorthPark, New York Herald Square, San Francisco Centre.
+Allowed gender values: Men, Women, Unisex.
+Allowed urgency values: today, tomorrow, soon.
+
+Rules:
+- Return exactly this shape: {"slots": {}, "assistantMessage": "", "confidence": 0}.
+- Use the current intake state and the field currently being asked for.
+- If askedFor is budgetMax, messages like "400 is great", "about 500", "let's do 650", or "under £300" are budgets.
+- If askedFor is stylePreference, messages like "not too loud" mean minimal; "smart but comfy" can be comfortable; "you choose" means classic.
+- Do not invent eventType, budgetMax, or stylePreference if the message does not imply them.
+- Prefer extracting values over asking the same question again.
+- Keep assistantMessage brief and conversational for WhatsApp.
+- If a required field is still missing after applying slots, assistantMessage should ask only for the next missing field.
+- If all required fields are known, assistantMessage should briefly confirm and say Mira is checking the RetailNEXT catalogue and store availability.`
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          message,
+          askedFor: intake.askedFor || null,
+          currentPayload: intake.payload || {},
+          collected: intake.collected || {},
+          fallbackSlots,
+          requiredFields: requiredIntakeFields
+        })
+      }
+    ]);
+    return {
+      slots: sanitizeIntakeSlots(result.slots || result),
+      assistantMessage: compactText(result.assistantMessage),
+      confidence: Number(result.confidence || 0)
+    };
+  } catch (error) {
+    console.warn(`OpenAI intake fallback: ${error.message}`);
+    return null;
+  }
 }
 
 function inferRecommendationPayload(message) {
@@ -533,9 +696,37 @@ function intakeQuestion(field, intake) {
   return intakeIntroPrompt();
 }
 
-function applyIntakeSlots(session, message) {
+function isUsefulIntakeSlot(key) {
+  return requiredIntakeFields.includes(key) || ["store", "gender", "urgency"].includes(key);
+}
+
+function hasUsefulIntakeSlots(slots = {}) {
+  return Object.keys(slots).some((key) => isUsefulIntakeSlot(key));
+}
+
+function responseLooksAlignedWithField(response, field) {
+  const text = String(response || "").toLowerCase();
+  if (!text) return false;
+  if (field === "eventType") return /\b(event|occasion|moment|dressing|dress|outfit|what.*for)\b/.test(text);
+  if (field === "budgetMax") return /\b(budget|spend|under|max|maximum|price|[$£])\b/.test(text);
+  if (field === "stylePreference") return /\b(style|direction|vibe|look|minimal|classic|comfortable|trend|bold|simple|smart|polished)\b/.test(text);
+  return false;
+}
+
+function intakeAskResponse(field, intake, aiMessage = "") {
+  const fallback = intakeQuestion(field, intake);
+  return responseLooksAlignedWithField(aiMessage, field) ? aiMessage : fallback;
+}
+
+function intakeReadyResponse(payload, aiMessage = "") {
+  const text = compactText(aiMessage);
+  if (/\b(checking|catalogue|availability|retailnext)\b/i.test(text)) return text;
+  return readyToRecommendPrompt(payload);
+}
+
+function applyIntakeSlots(session, message, providedSlots = null) {
   const intake = ensureIntake(session);
-  const slots = inferPayloadSlots(message, { askedFor: intake.askedFor });
+  const slots = sanitizeIntakeSlots(providedSlots || inferPayloadSlots(message, { askedFor: intake.askedFor }));
   for (const [key, value] of Object.entries(slots)) {
     intake.payload[key] = value;
     if (requiredIntakeFields.includes(key)) intake.collected[key] = true;
@@ -566,20 +757,29 @@ function readyToRecommendPrompt(payload) {
   ].join("\n");
 }
 
-function handleIntakeMessage(session, message) {
+async function handleIntakeMessage(session, message) {
   const intake = ensureIntake(session);
-  const slots = applyIntakeSlots(session, message);
-  const hasUsefulSlot = Object.keys(slots).some((key) => requiredIntakeFields.includes(key) || ["store", "gender", "urgency"].includes(key));
+  const fallbackSlots = inferPayloadSlots(message, { askedFor: intake.askedFor });
 
-  if (!hasUsefulSlot && isGreetingOnly(message)) {
+  if (!hasUsefulIntakeSlots(fallbackSlots) && isGreetingOnly(message)) {
     intake.askedFor = "eventType";
     return { action: "ask", response: intakeIntroPrompt() };
   }
 
+  const aiInterpretation = await interpretIntakeWithOpenAI(session, message, fallbackSlots);
+  const slots = {
+    ...fallbackSlots,
+    ...(aiInterpretation?.slots || {})
+  };
+  applyIntakeSlots(session, message, slots);
+
   const missing = nextMissingIntakeField(intake);
   if (missing) {
     intake.askedFor = missing;
-    return { action: "ask", response: intakeQuestion(missing, intake) };
+    return {
+      action: "ask",
+      response: intakeAskResponse(missing, intake, aiInterpretation?.assistantMessage)
+    };
   }
 
   const payload = finaliseIntakePayload(intake);
@@ -588,7 +788,7 @@ function handleIntakeMessage(session, message) {
   return {
     action: "build",
     payload,
-    response: readyToRecommendPrompt(payload)
+    response: intakeReadyResponse(payload, aiInterpretation?.assistantMessage)
   };
 }
 
@@ -719,7 +919,7 @@ export async function handleTwilioWebhook(req, res, { schedule = (promise) => { 
   if (command.handled) return sendXml(res, command.response);
 
   if (!session.recommendation) {
-    const intake = handleIntakeMessage(session, message);
+    const intake = await handleIntakeMessage(session, message);
     await saveSession(session);
     if (intake.action === "ask") return sendXml(res, intake.response);
     sendXml(res, intake.response);
