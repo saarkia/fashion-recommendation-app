@@ -9,6 +9,8 @@ const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || "";
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || "";
 const TWILIO_WHATSAPP_FROM = process.env.TWILIO_WHATSAPP_FROM || "whatsapp:+14155238886";
 const TWILIO_API_BASE = "https://api.twilio.com/2010-04-01";
+const TWILIO_TYPING_API_URL = "https://messaging.twilio.com/v2/Indicators/Typing.json";
+const TWILIO_TYPING_INDICATORS_ENABLED = process.env.TWILIO_TYPING_INDICATORS_ENABLED !== "false";
 const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const WHATSAPP_SEND_SPACING_MS = Number(process.env.WHATSAPP_SEND_SPACING_MS || 1300);
 const BLOB_READ_WRITE_TOKEN = process.env.BLOB_READ_WRITE_TOKEN || "";
@@ -591,6 +593,40 @@ async function sendWhatsApp(to, body, { mediaUrl = "" } = {}) {
   return payload;
 }
 
+async function sendTypingIndicator(messageSid) {
+  const messageId = compactText(messageSid);
+  if (!TWILIO_TYPING_INDICATORS_ENABLED || !messageId) return null;
+  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
+    console.warn("Skipping WhatsApp typing indicator because Twilio credentials are not configured.");
+    return null;
+  }
+
+  const form = new URLSearchParams({
+    messageId,
+    channel: "whatsapp"
+  });
+  const response = await fetch(TWILIO_TYPING_API_URL, {
+    method: "POST",
+    headers: {
+      "authorization": `Basic ${Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString("base64")}`,
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    body: form.toString()
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.message || `Twilio typing indicator returned ${response.status}`);
+  }
+  return payload;
+}
+
+function safeSendTypingIndicator(messageSid) {
+  if (!messageSid) return;
+  sendTypingIndicator(messageSid).catch((error) => {
+    console.warn(`WhatsApp typing indicator failed: ${error.message}`);
+  });
+}
+
 async function safeSendWhatsApp(to, body, options = {}) {
   try {
     return await sendWhatsApp(to, body, options);
@@ -983,8 +1019,9 @@ async function continueChat(from, message, session) {
   await safeSendWhatsApp(from, formatChatResult(data));
 }
 
-async function handleAsyncMessage(from, message, session, recommendationPayload = null) {
+async function handleAsyncMessage(from, message, session, recommendationPayload = null, messageSid = "") {
   try {
+    safeSendTypingIndicator(messageSid);
     if (!session.recommendation) {
       await buildRecommendation(from, message, session, recommendationPayload);
       return;
@@ -1081,6 +1118,7 @@ export async function handleTwilioWebhook(req, res, { schedule = (promise) => { 
   const from = compactText(form.From);
   const to = compactText(form.To, TWILIO_WHATSAPP_FROM);
   const message = compactText(form.Body);
+  const messageSid = compactText(form.MessageSid || form.SmsMessageSid || form.SmsSid);
   if (!from) return sendXml(res, "Mira could not identify the WhatsApp sender.");
 
   const session = await loadSession(from, to);
@@ -1093,6 +1131,7 @@ export async function handleTwilioWebhook(req, res, { schedule = (promise) => { 
       return sendXml(res, recommendationPendingMessage(session));
     }
 
+    if (!isGreetingOnly(message)) safeSendTypingIndicator(messageSid);
     const intake = await handleIntakeMessage(session, message);
     if (intake.action === "ask") {
       await saveSession(session);
@@ -1101,16 +1140,17 @@ export async function handleTwilioWebhook(req, res, { schedule = (promise) => { 
     markRecommendationPending(session, intake.payload);
     await saveSession(session);
     sendXml(res, intake.response);
-    schedule(handleAsyncMessage(from, message, session, intake.payload));
+    schedule(handleAsyncMessage(from, message, session, intake.payload, messageSid));
     return;
   }
 
+  safeSendTypingIndicator(messageSid);
   const ack = session.recommendation
     ? "Mira is checking the current outfit against the RetailNEXT catalogue and store availability."
     : "Mira is checking the RetailNEXT catalogue, budget and store availability now.";
   sendXml(res, ack);
 
-  schedule(handleAsyncMessage(from, message, session));
+  schedule(handleAsyncMessage(from, message, session, null, messageSid));
 }
 
 export async function handleBridgeRequest(req, res, { schedule } = {}) {
