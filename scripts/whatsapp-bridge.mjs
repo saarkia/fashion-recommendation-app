@@ -318,6 +318,7 @@ function cleanAssistantMessage(text) {
     .replace(/\bstylePreference\b/gi, "style direction")
     .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "")
     .replace(/\s+/g, " ")
+    .replace(/\s+([?.!,])/g, "$1")
     .trim();
 }
 
