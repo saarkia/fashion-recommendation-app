@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { appendFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { del, get, put } from "@vercel/blob";
 
@@ -12,6 +13,8 @@ const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const WHATSAPP_SEND_SPACING_MS = Number(process.env.WHATSAPP_SEND_SPACING_MS || 1300);
 const BLOB_READ_WRITE_TOKEN = process.env.BLOB_READ_WRITE_TOKEN || "";
 const SESSION_BLOB_PREFIX = "whatsapp/sessions";
+const WHATSAPP_RECOMMENDATION_CARD_LIMIT = Number(process.env.WHATSAPP_RECOMMENDATION_CARD_LIMIT || 4);
+const WHATSAPP_DRY_RUN_OUTBOX = process.env.WHATSAPP_DRY_RUN_OUTBOX || "";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_MODEL_FAST = process.env.OPENAI_MODEL_FAST || process.env.OPENAI_MODEL || "gpt-5.4-nano";
 const OPENAI_TEXT_VERBOSITY = process.env.OPENAI_TEXT_VERBOSITY || "low";
@@ -69,6 +72,7 @@ function createIntake() {
       customerSizing: { ...demoDefaults.customerSizing }
     },
     collected: {},
+    history: [],
     askedFor: null
   };
 }
@@ -142,7 +146,8 @@ function normalizeSession(session, from, to = "") {
       },
       collected: {
         ...(session?.intake?.collected || {})
-      }
+      },
+      history: Array.isArray(session?.intake?.history) ? session.intake.history.slice(-10) : []
     }
   };
 }
@@ -379,7 +384,7 @@ function inferStylePreference(message, { allowDefaultText = false } = {}) {
   const text = String(message || "").toLowerCase();
   if (/\b(comfortable|comfy|relaxed|easy)\b/.test(text)) return "comfortable";
   if (/\b(trend|bold|fashion|statement|brighter|bright|modern|stand out)\b/.test(text)) return "trend-forward";
-  if (/\b(minimal|simple|clean|understated|neutral|not loud)\b/.test(text)) return "minimal";
+  if (/\b(minimal|simple|clean|understated|neutral)\b/.test(text) || /\b(?:not|nothing)\s+(?:too\s+)?(?:loud|flashy|bold|busy)\b/.test(text)) return "minimal";
   if (/\b(classic|timeless|traditional|smart|smart casual|professional|polished)\b/.test(text)) return "classic";
   if (allowDefaultText && /\b(not sure|unsure|you choose|recommend|whatever)\b/.test(text)) return "classic";
   return null;
@@ -456,13 +461,20 @@ Allowed gender values: Men, Women, Unisex.
 Allowed urgency values: today, tomorrow, soon.
 
 Rules:
-- Return exactly this shape: {"slots": {}, "assistantMessage": "", "confidence": 0}.
+- Return exactly this shape: {"intent": "intake", "slots": {}, "assistantMessage": "", "confidence": 0}.
+- intent must be one of: intake, help, chitchat, off_topic, nonsense, ready.
 - Use the current intake state and the field currently being asked for.
+- Use recentIntakeHistory to understand short replies and corrections.
+- The user may answer in casual language, combine several fields, correct an earlier value, or provide fields out of order.
 - If askedFor is budgetMax, messages like "400 is great", "about 500", "let's do 650", or "under £300" are budgets.
-- If askedFor is stylePreference, messages like "not too loud" mean minimal; "smart but comfy" can be comfortable; "you choose" means classic.
+- If askedFor is stylePreference, messages like "not too loud", "not flashy", or "nothing too busy" mean minimal; "smart but comfy" can be comfortable; "you choose" means classic.
+- If the user gives a budget before the event, extract budgetMax and ask for eventType next.
 - Do not invent eventType, budgetMax, or stylePreference if the message does not imply them.
 - Prefer extracting values over asking the same question again.
-- Keep assistantMessage brief and conversational for WhatsApp.
+- If the message is rubbish, keyboard smash, or unrelated, set intent to nonsense or off_topic, keep slots empty, and politely ask the next missing required field.
+- If the user asks what Mira can do, set intent to help and briefly explain the outfit service before asking the next missing required field.
+- Do not claim a recommendation exists until all required fields are known.
+- Keep assistantMessage brief and conversational for WhatsApp, but always end with a clear question if required fields are missing.
 - If a required field is still missing after applying slots, assistantMessage should ask only for the next missing field.
 - If all required fields are known, assistantMessage should briefly confirm and say Mira is checking the RetailNEXT catalogue and store availability.`
       },
@@ -473,6 +485,7 @@ Rules:
           askedFor: intake.askedFor || null,
           currentPayload: intake.payload || {},
           collected: intake.collected || {},
+          recentIntakeHistory: (intake.history || []).slice(-8),
           fallbackSlots,
           requiredFields: requiredIntakeFields
         })
@@ -481,6 +494,7 @@ Rules:
     return {
       slots: sanitizeIntakeSlots(result.slots || result),
       assistantMessage: compactText(result.assistantMessage),
+      intent: compactText(result.intent, "intake"),
       confidence: Number(result.confidence || 0)
     };
   } catch (error) {
@@ -520,6 +534,18 @@ function sleep(ms) {
 }
 
 async function sendWhatsApp(to, body, { mediaUrl = "" } = {}) {
+  if (WHATSAPP_DRY_RUN_OUTBOX) {
+    await appendFile(WHATSAPP_DRY_RUN_OUTBOX, `${JSON.stringify({
+      at: new Date().toISOString(),
+      from: TWILIO_WHATSAPP_FROM,
+      to,
+      body,
+      mediaUrl
+    })}\n`);
+    console.warn(`Dry-run WhatsApp send to ${to}: ${body}${mediaUrl ? `\nMedia: ${mediaUrl}` : ""}`);
+    return { dryRun: true };
+  }
+
   if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
     console.warn("Skipping outbound WhatsApp send because Twilio credentials are not configured.");
     console.warn(`Would send to ${to}: ${body}${mediaUrl ? `\nMedia: ${mediaUrl}` : ""}`);
@@ -565,6 +591,12 @@ function inventoryCount(product, store) {
   return Number(product?.inventory?.[store] || 0);
 }
 
+function priceLabel(value) {
+  const price = Number(value);
+  if (!Number.isFinite(price)) return "";
+  return `$${Math.round(price)}`;
+}
+
 function absoluteImageUrl(product) {
   const image = product?.image;
   if (!image || image.startsWith("data:")) return "";
@@ -579,29 +611,67 @@ function isFreshRecommendation(recommendation = {}) {
     || recommendation.analysis?.structuredAttributes?.item_type === "Complete outfit";
 }
 
+function allOutfitProducts(recommendation = {}) {
+  return (recommendation.outfit || [])
+    .filter((product) => product?.productDisplayName);
+}
+
+function cardOutfitProducts(recommendation = {}) {
+  return allOutfitProducts(recommendation)
+    .slice(0, Math.max(1, WHATSAPP_RECOMMENDATION_CARD_LIMIT));
+}
+
+function itemSummaryLine(product, recommendation, index) {
+  const store = recommendation.store || "selected store";
+  const stock = inventoryCount(product, store);
+  const price = priceLabel(product.price);
+  const stockLabel = stock > 0 ? `${stock} at ${store}` : `check ${store} stock`;
+  return `${index + 1}. ${roleLabel(product.role || product.articleType)}: ${product.productDisplayName}${price ? ` - ${price}` : ""} (${stockLabel})`;
+}
+
+function formatOutfitList(recommendation) {
+  const products = allOutfitProducts(recommendation);
+  if (!products.length) return "";
+  return products.map((product, index) => itemSummaryLine(product, recommendation, index)).join("\n");
+}
+
+function pluralPiece(count) {
+  return count === 1 ? "piece" : "pieces";
+}
+
 function formatRecommendation(recommendation) {
   const event = recommendation.event || "your event";
   const starter = recommendation.reference?.productDisplayName || recommendation.analysis?.item || "your starter item";
   const isFresh = isFreshRecommendation(recommendation);
   const business = recommendation.business || {};
   const basketValue = business.basketValue || (recommendation.outfit || []).reduce((sum, product) => sum + Number(product.price || 0), 0);
-  const availableToday = business.availableToday ?? (recommendation.outfit || []).filter((product) => inventoryCount(product, recommendation.store) > 0).length;
+  const allProducts = allOutfitProducts(recommendation);
+  const cardProducts = cardOutfitProducts(recommendation);
+  const itemCount = business.itemCount || allProducts.length || (recommendation.outfit || []).length;
+  const availableToday = business.availableToday ?? allProducts.filter((product) => inventoryCount(product, recommendation.store) > 0).length;
   const introLines = (recommendation.analysis?.introLines || [])
     .map((line) => compactText(line))
     .filter(Boolean)
     .slice(0, 2);
-  const mission = compactText(recommendation.agent?.mission);
-  const styleSignal = compactText(recommendation.agent?.styleSignal);
   const openAiSignal = recommendation.ai?.copyGeneration === "openai" || recommendation.agent?.source === "openai"
     ? "OpenAI-written styling notes, grounded in RetailNEXT catalogue and store data."
     : "Styling notes grounded in RetailNEXT catalogue and store data.";
+  const outfitList = formatOutfitList(recommendation);
+  const intro = introLines[0] || (isFresh
+    ? `I found a complete outfit for ${String(event).toLowerCase()}.`
+    : `I built this around ${starter} for ${String(event).toLowerCase()}.`);
+  const cardNote = cardProducts.length >= allProducts.length
+    ? `I’ll send each piece with an image next.`
+    : `I’ll send images for the first ${cardProducts.length} ${pluralPiece(cardProducts.length)} next.`;
 
   return [
-    introLines[0] || (isFresh ? `I built a complete outfit for ${String(event).toLowerCase()}.` : `I built this around ${starter} for ${String(event).toLowerCase()}.`),
-    introLines[1] || mission || styleSignal || `I checked the look against ${recommendation.store} availability before showing it to you.`,
+    intro,
+    `I checked ${itemCount} ${pluralPiece(itemCount)} against ${recommendation.store} availability before showing them to you.`,
     "",
-    `Basket: $${basketValue} | Available today: ${availableToday}/${(recommendation.outfit || []).length} at ${recommendation.store}`,
+    `Basket: $${basketValue} | Available today: ${availableToday}/${itemCount} at ${recommendation.store}`,
+    outfitList ? `Pieces:\n${outfitList}` : "",
     openAiSignal,
+    outfitList ? cardNote : "",
     "",
     `Open the live stylist: ${MIRA_BASE_URL}`,
     "",
@@ -612,16 +682,22 @@ function formatRecommendation(recommendation) {
 function formatProductCaption(product, recommendation) {
   const store = recommendation.store || "selected store";
   const stock = inventoryCount(product, store);
+  const price = priceLabel(product.price);
   return [
     `${roleLabel(product.role || product.articleType)}: ${product.productDisplayName}`,
-    `$${product.price} | ${stock} at ${store}`,
+    `${price || "Price in app"} | ${stock} at ${store}`,
     compactText(product.why)
   ].filter(Boolean).join("\n");
 }
 
 async function sendRecommendationMessages(from, recommendation) {
-  const heroImageUrl = absoluteImageUrl((recommendation.outfit || [])[0]);
-  await safeSendWhatsApp(from, formatRecommendation(recommendation), { mediaUrl: heroImageUrl });
+  await safeSendWhatsApp(from, formatRecommendation(recommendation));
+
+  for (const product of cardOutfitProducts(recommendation)) {
+    const mediaUrl = absoluteImageUrl(product);
+    await sleep(WHATSAPP_SEND_SPACING_MS);
+    await safeSendWhatsApp(from, formatProductCaption(product, recommendation), { mediaUrl });
+  }
 }
 
 function formatPreview(data) {
@@ -668,7 +744,16 @@ function ensureIntake(session) {
   if (!session.intake) session.intake = createIntake();
   if (!session.intake.payload) session.intake.payload = createIntake().payload;
   if (!session.intake.collected) session.intake.collected = {};
+  if (!Array.isArray(session.intake.history)) session.intake.history = [];
   return session.intake;
+}
+
+function recordIntakeTurn(session, role, content) {
+  const intake = ensureIntake(session);
+  const text = compactText(content);
+  if (!text) return;
+  intake.history.push({ role, content: text });
+  intake.history = intake.history.slice(-10);
 }
 
 function isGreetingOnly(message) {
@@ -696,6 +781,21 @@ function intakeQuestion(field, intake) {
   return intakeIntroPrompt();
 }
 
+function intakeRetryQuestion(field, intake) {
+  const payload = intake.payload || {};
+  if (field === "eventType") {
+    return "I didn’t catch the occasion yet. What are you dressing for? For example: first day at a new job, outdoor wedding, business conference, holiday party, or vacation.";
+  }
+  if (field === "budgetMax") {
+    return `I’ve got ${eventLabel(payload.eventType)}. What budget should I keep the full outfit under?`;
+  }
+  if (field === "stylePreference") {
+    const budget = payload.budgetMax ? `$${payload.budgetMax}` : "that budget";
+    return `I’ve got the occasion and ${budget} budget. What style direction should I use: minimal, classic, comfortable, or trend-forward?`;
+  }
+  return intakeIntroPrompt();
+}
+
 function isUsefulIntakeSlot(key) {
   return requiredIntakeFields.includes(key) || ["store", "gender", "urgency"].includes(key);
 }
@@ -707,14 +807,14 @@ function hasUsefulIntakeSlots(slots = {}) {
 function responseLooksAlignedWithField(response, field) {
   const text = String(response || "").toLowerCase();
   if (!text) return false;
-  if (field === "eventType") return /\b(event|occasion|moment|dressing|dress|outfit|what.*for)\b/.test(text);
-  if (field === "budgetMax") return /\b(budget|spend|under|max|maximum|price|[$£])\b/.test(text);
-  if (field === "stylePreference") return /\b(style|direction|vibe|look|minimal|classic|comfortable|trend|bold|simple|smart|polished)\b/.test(text);
+  if (field === "eventType") return /\b(event|occasion|moment|dressing|dress|outfit|shopping|wearing|what.*for)\b/.test(text);
+  if (field === "budgetMax") return /\b(budget|spend|under|max|maximum|price|cost|keep.*under|[$£])\b/.test(text);
+  if (field === "stylePreference") return /\b(style|direction|vibe|look|prefer|minimal|classic|comfortable|trend|bold|simple|smart|polished)\b/.test(text);
   return false;
 }
 
-function intakeAskResponse(field, intake, aiMessage = "") {
-  const fallback = intakeQuestion(field, intake);
+function intakeAskResponse(field, intake, aiMessage = "", { retry = false } = {}) {
+  const fallback = retry ? intakeRetryQuestion(field, intake) : intakeQuestion(field, intake);
   return responseLooksAlignedWithField(aiMessage, field) ? aiMessage : fallback;
 }
 
@@ -760,10 +860,14 @@ function readyToRecommendPrompt(payload) {
 async function handleIntakeMessage(session, message) {
   const intake = ensureIntake(session);
   const fallbackSlots = inferPayloadSlots(message, { askedFor: intake.askedFor });
+  let response;
 
   if (!hasUsefulIntakeSlots(fallbackSlots) && isGreetingOnly(message)) {
     intake.askedFor = "eventType";
-    return { action: "ask", response: intakeIntroPrompt() };
+    response = intakeIntroPrompt();
+    recordIntakeTurn(session, "user", message);
+    recordIntakeTurn(session, "assistant", response);
+    return { action: "ask", response };
   }
 
   const aiInterpretation = await interpretIntakeWithOpenAI(session, message, fallbackSlots);
@@ -772,23 +876,32 @@ async function handleIntakeMessage(session, message) {
     ...(aiInterpretation?.slots || {})
   };
   applyIntakeSlots(session, message, slots);
+  const hasUsefulSlot = hasUsefulIntakeSlots(slots);
 
   const missing = nextMissingIntakeField(intake);
   if (missing) {
     intake.askedFor = missing;
+    response = intakeAskResponse(missing, intake, aiInterpretation?.assistantMessage, {
+      retry: !hasUsefulSlot && !isGreetingOnly(message)
+    });
+    recordIntakeTurn(session, "user", message);
+    recordIntakeTurn(session, "assistant", response);
     return {
       action: "ask",
-      response: intakeAskResponse(missing, intake, aiInterpretation?.assistantMessage)
+      response
     };
   }
 
   const payload = finaliseIntakePayload(intake);
   session.recommendationPayload = payload;
   intake.askedFor = null;
+  response = intakeReadyResponse(payload, aiInterpretation?.assistantMessage);
+  recordIntakeTurn(session, "user", message);
+  recordIntakeTurn(session, "assistant", response);
   return {
     action: "build",
     payload,
-    response: intakeReadyResponse(payload, aiInterpretation?.assistantMessage)
+    response
   };
 }
 
