@@ -311,10 +311,13 @@ function responseText(payload) {
 
 function cleanAssistantMessage(text) {
   return compactText(text)
+    .replace(/\s*\(\s*event\s*type\s*\)\s*/gi, " ")
+    .replace(/\bevent\s*type\b/gi, "occasion")
     .replace(/\beventType\b/gi, "occasion")
     .replace(/\bbudgetMax\b/gi, "budget")
     .replace(/\bstylePreference\b/gi, "style direction")
     .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
