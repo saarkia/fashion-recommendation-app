@@ -320,7 +320,7 @@ function responseText(payload) {
 }
 
 function cleanAssistantMessage(text) {
-  return compactText(text)
+  return normalizeMiraVoice(compactText(text))
     .replace(/\s*\(\s*event\s*type\s*\)\s*/gi, " ")
     .replace(/\bevent\s*type\b/gi, "occasion")
     .replace(/\beventType\b/gi, "occasion")
@@ -329,6 +329,32 @@ function cleanAssistantMessage(text) {
     .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "")
     .replace(/\s+/g, " ")
     .replace(/\s+([?.!,])/g, "$1")
+    .trim();
+}
+
+function normalizeMiraVoice(text, fallback = "") {
+  const withoutFixedCommands = String(text || fallback || "")
+    .split(/\n+/)
+    .filter((line) => !/^\s*Reply\s+["“]/i.test(line))
+    .filter((line) => !/\bReply\s+["“](?:change shoes|apply|save|reset)["”]/i.test(line))
+    .join("\n");
+
+  return withoutFixedCommands
+    .replace(/\bMira(?:'|’)s\b/g, "my")
+    .replace(/\bMira is\b/g, "I’m")
+    .replace(/\bMira has\b/g, "I’ve")
+    .replace(/\bMira can\b/g, "I can")
+    .replace(/\bMira will\b/g, "I’ll")
+    .replace(/\bMira would\b/g, "I’d")
+    .replace(/\bMira could\b/g, "I could")
+    .replace(/\bMira found\b/g, "I found")
+    .replace(/\bMira built\b/g, "I built")
+    .replace(/\bMira generated\b/g, "I generated")
+    .replace(/\bMira updated\b/g, "I updated")
+    .replace(/\bMira hit\b/g, "I hit")
+    .replace(/\bby Mira\b/g, "by me")
+    .replace(/\bwith Mira\b/g, "with me")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
@@ -495,13 +521,15 @@ Rules:
 - Do not invent eventType, budgetMax, or stylePreference if the message does not imply them.
 - Prefer extracting values over asking the same question again.
 - If the message is rubbish, keyboard smash, or unrelated, set intent to nonsense or off_topic, keep slots empty, and politely ask the next missing required field.
-- If the user asks what Mira can do, set intent to help and briefly explain the outfit service before asking the next missing required field.
+- Write as Mira in first person. Use "I" and "my"; never say "Mira is", "Mira has", or describe Mira in the third person.
+- If the user asks what Mira can do, set intent to help and briefly explain that I can build a complete outfit, check local stock, and help them save it for store try-on or buy it online before asking the next missing required field.
 - Do not claim a recommendation exists until all required fields are known.
 - Do not mention internal schema names like eventType, budgetMax, stylePreference, slots, payload, or fields.
+- Do not teach fixed commands such as Reply "save", Reply "apply", Reply "reset", or Reply "change shoes". Ask natural follow-up questions instead.
 - Do not use emoji.
 - Keep assistantMessage brief and conversational for WhatsApp, but always end with a clear question if required fields are missing.
 - If a required field is still missing after applying slots, assistantMessage should ask only for the next missing field.
-- If all required fields are known, assistantMessage should briefly confirm and say Mira is checking the RetailNEXT catalogue and store availability.`
+- If all required fields are known, assistantMessage should briefly confirm and say I am checking the RetailNEXT catalogue, budget, and local availability.`
       },
       {
         role: "user",
@@ -720,6 +748,27 @@ function pluralPiece(count) {
   return count === 1 ? "piece" : "pieces";
 }
 
+function outfitActionPrompt(recommendation = {}) {
+  const store = recommendation.store || "your local store";
+  return `Everything here is available at ${store} today. Would you like me to save the outfit so you can try it on in store, or would you rather buy it now on the site? If you want a tweak, just tell me what you’d change.`;
+}
+
+function outfitPurchaseLine() {
+  return `Buy the look online: ${MIRA_BASE_URL}`;
+}
+
+function normalizeRecommendationIntro(line) {
+  return normalizeMiraVoice(compactText(line))
+    .replace(/^Build\b/i, "I built")
+    .replace(/^Create\b/i, "I created")
+    .replace(/^Put together\b/i, "I put together")
+    .replace(/^Pair\b/i, "I paired");
+}
+
+function isFirstPersonCopy(line) {
+  return /\bI(?:\s|$|[’'](?:m|ve|ll|d)\b)/i.test(String(line || ""));
+}
+
 function formatRecommendation(recommendation) {
   const event = recommendation.event || "your event";
   const starter = recommendation.reference?.productDisplayName || recommendation.analysis?.item || "your starter item";
@@ -731,14 +780,15 @@ function formatRecommendation(recommendation) {
   const itemCount = business.itemCount || allProducts.length || (recommendation.outfit || []).length;
   const availableToday = business.availableToday ?? allProducts.filter((product) => inventoryCount(product, recommendation.store) > 0).length;
   const introLines = (recommendation.analysis?.introLines || [])
-    .map((line) => compactText(line))
+    .map((line) => normalizeRecommendationIntro(line))
     .filter(Boolean)
     .slice(0, 2);
   const openAiSignal = recommendation.ai?.copyGeneration === "openai" || recommendation.agent?.source === "openai"
-    ? "OpenAI-written styling notes, grounded in RetailNEXT catalogue and store data."
-    : "Styling notes grounded in RetailNEXT catalogue and store data.";
+    ? "I’ve written the styling notes with OpenAI, grounded in RetailNEXT catalogue and store data."
+    : "I’ve grounded the styling notes in RetailNEXT catalogue and store data.";
   const outfitList = formatOutfitList(recommendation);
-  const intro = introLines[0] || (isFresh
+  const firstPersonIntro = introLines.find((line) => isFirstPersonCopy(line));
+  const intro = firstPersonIntro || (isFresh
     ? `I found a complete outfit for ${String(event).toLowerCase()}.`
     : `I built this around ${starter} for ${String(event).toLowerCase()}.`);
   const cardNote = cardProducts.length >= allProducts.length
@@ -754,9 +804,9 @@ function formatRecommendation(recommendation) {
     openAiSignal,
     outfitList ? cardNote : "",
     "",
-    `Open the live stylist: ${MIRA_BASE_URL}`,
+    outfitPurchaseLine(),
     "",
-    `Reply "change shoes", "apply", "save", or "reset".`
+    outfitActionPrompt(recommendation)
   ].filter((line) => line !== undefined && line !== null).join("\n");
 }
 
@@ -767,7 +817,7 @@ function formatProductCaption(product, recommendation) {
   return [
     `${roleLabel(product.role || product.articleType)}: ${product.productDisplayName}`,
     `${price || "Price in app"} | ${stock} at ${store}`,
-    compactText(product.why)
+    normalizeMiraVoice(compactText(product.why))
   ].filter(Boolean).join("\n");
 }
 
@@ -779,25 +829,35 @@ async function sendRecommendationMessages(from, recommendation) {
     await sleep(WHATSAPP_SEND_SPACING_MS);
     await safeSendWhatsApp(from, formatProductCaption(product, recommendation), { mediaUrl });
   }
+
+  if (cardOutfitProducts(recommendation).length) {
+    await sleep(WHATSAPP_SEND_SPACING_MS);
+    await safeSendWhatsApp(from, [
+      outfitActionPrompt(recommendation),
+      outfitPurchaseLine()
+    ].join("\n\n"));
+  }
 }
 
 function formatPreview(data) {
-  const lines = [compactText(data.assistantMessage, "I found a preview update for this outfit.")];
+  const lines = [];
   if (data.previewSwap?.from && data.previewSwap?.to) {
-    lines.push("");
-    lines.push(`Preview: ${data.previewSwap.from.productDisplayName} -> ${data.previewSwap.to.productDisplayName}`);
+    lines.push(`I can switch ${data.previewSwap.from.productDisplayName} for ${data.previewSwap.to.productDisplayName}.`);
+    lines.push("I checked that swap against RetailNEXT inventory and local availability.");
+  } else {
+    lines.push(normalizeMiraVoice(compactText(data.assistantMessage, "I found a preview update for this outfit.")));
   }
   lines.push("");
-  lines.push(`Reply "apply" to update the outfit, or ask for another change.`);
+  lines.push("Would you like me to use that swap, or keep looking?");
   return lines.join("\n");
 }
 
 function formatLookup(data) {
   const lookup = data.lookupResults;
-  if (!lookup?.matches?.length) return compactText(data.assistantMessage, "I checked store availability.");
+  if (!lookup?.matches?.length) return normalizeMiraVoice(compactText(data.assistantMessage, "I checked store availability."));
   const matches = lookup.matches.slice(0, 3).map((item, index) => `${index + 1}. ${item.productDisplayName} - $${item.price} (${item.inventoryCount} in store)`);
   return [
-    compactText(data.assistantMessage, lookup.summary),
+    normalizeMiraVoice(compactText(data.assistantMessage, lookup.summary)),
     "",
     matches.join("\n")
   ].join("\n");
@@ -806,7 +866,7 @@ function formatLookup(data) {
 function formatChatResult(data) {
   if (data.action === "preview_update") return formatPreview(data);
   if (data.action === "availability_lookup") return formatLookup(data);
-  return compactText(data.assistantMessage, "I checked the basket.");
+  return normalizeMiraVoice(compactText(data.assistantMessage, "I checked the basket."));
 }
 
 function chatConstraints(session) {
@@ -943,7 +1003,7 @@ function finaliseIntakePayload(intake) {
 function readyToRecommendPrompt(payload) {
   return [
     `Perfect — I’ve got ${eventLabel(payload.eventType)}, ${styleLabel(payload.stylePreference)}, and a $${payload.budgetMax} budget.`,
-    `Mira is checking the RetailNEXT catalogue, budget and ${payload.store} availability now.`
+    `I’m checking the RetailNEXT catalogue, budget and ${payload.store} availability now.`
   ].join("\n");
 }
 
@@ -1015,7 +1075,7 @@ async function buildRecommendation(from, message, session, recommendationPayload
     lockedProductIds: [],
     preferences: []
   };
-  session.history.push({ role: "assistant", content: "Mira generated a RetailNEXT outfit recommendation." });
+  session.history.push({ role: "assistant", content: "I generated a RetailNEXT outfit recommendation." });
   session.updatedAt = now();
   await saveSession(session);
 
@@ -1059,7 +1119,7 @@ async function handleAsyncMessage(from, message, session, recommendationPayload 
     console.error(error);
     session.recommendationPending = null;
     await saveSession(session);
-    await safeSendWhatsApp(from, `Mira hit a demo issue: ${error.message}. Reply "reset" and try the full-outfit prompt again.`);
+    await safeSendWhatsApp(from, `I hit a demo issue: ${error.message}. You can start over and tell me the occasion, budget and style again.`);
   } finally {
     stopTypingPulse();
   }
@@ -1084,7 +1144,7 @@ function isRecommendationPending(session) {
 function recommendationPendingMessage(session) {
   const payload = session.recommendationPending?.payload || session.recommendationPayload || {};
   const store = payload.store || demoDefaults.store;
-  return `Mira is already checking the RetailNEXT catalogue and ${store} availability. I’ll send the outfit here as soon as it’s ready.`;
+  return `I’m already checking the RetailNEXT catalogue and ${store} availability. I’ll send the outfit here as soon as it’s ready.`;
 }
 
 function applyPreview(session) {
@@ -1095,6 +1155,57 @@ function applyPreview(session) {
   session.previewSwap = null;
   session.updatedAt = now();
   return swap;
+}
+
+function wantsPreviewApplied(text, session) {
+  if (!session.previewRecommendation) return false;
+  const value = String(text || "").toLowerCase();
+  if (/\b(no|nah|not that|don'?t|do not|keep looking|keep the current|leave it)\b/.test(value)) return false;
+  return /\b(apply|yes|yeah|yep|ok|okay|that works|looks good|do it|make that change|go with (?:that|those|this|them)|use (?:that|those|this|them|the swap))\b/.test(value);
+}
+
+function wantsToSaveOutfit(text, session) {
+  if (!session.recommendation) return false;
+  return /\b(save|saved|reserve|hold|try(?:\s+it|\s+this|\s+them)?\s+on|try.*store|in[-\s]?store|store visit|send.*notes|email.*notes)\b/i.test(text);
+}
+
+function wantsToPurchaseOutfit(text, session) {
+  if (!session.recommendation) return false;
+  return /\b(buy|purchase|checkout|check out|order|pay|website|site|link|online)\b/i.test(text);
+}
+
+function savedOutfitMessage(session) {
+  const recommendation = session.recommendation || {};
+  const store = recommendation.store || session.recommendationPayload?.store || demoDefaults.store;
+  const products = allOutfitProducts(recommendation);
+  const availableToday = products.filter((product) => inventoryCount(product, store) > 0).length;
+  const count = products.length || recommendation.business?.itemCount || 0;
+  const availability = count ? `${availableToday}/${count} pieces are available at ${store} today` : `the look is available at ${store}`;
+  return [
+    `I’ve saved this look for your RetailNEXT store visit. ${availability}, so the team can pull it together for you to try on.`,
+    "",
+    `If you’d rather buy now, you can open the outfit here: ${MIRA_BASE_URL}`
+  ].join("\n");
+}
+
+function purchaseOutfitMessage(session) {
+  const recommendation = session.recommendation || {};
+  const store = recommendation.store || session.recommendationPayload?.store || demoDefaults.store;
+  return [
+    `You can buy the outfit now here: ${MIRA_BASE_URL}`,
+    "",
+    `It’s also in stock at ${store} today if you’d rather try it on first. I can save the look for that store visit if that’s easier.`
+  ].join("\n");
+}
+
+function updatedOutfitActionMessage(session) {
+  const recommendation = session.recommendation || {};
+  const store = recommendation.store || session.recommendationPayload?.store || demoDefaults.store;
+  return [
+    `The updated outfit is still in stock at ${store} today.`,
+    "",
+    `Would you like me to save it so you can try it on in store, or would you rather buy it now here: ${MIRA_BASE_URL}`
+  ].join("\n");
 }
 
 async function handleImmediateCommand(session, message) {
@@ -1111,32 +1222,43 @@ async function handleImmediateCommand(session, message) {
     await deleteSession(session);
     return {
       handled: true,
-      response: `Mira has reset this WhatsApp demo session.\n\n${intakeIntroPrompt()}`
+      response: `I’ve reset this WhatsApp demo session.\n\n${intakeIntroPrompt()}`
     };
   }
 
-  if (text === "apply") {
+  if (text === "apply" || wantsPreviewApplied(text, session)) {
     const swap = applyPreview(session);
     if (!swap) {
       return {
         handled: true,
-        response: `There is no preview waiting to apply. Try "change shoes" after Mira builds the outfit.`
+        response: "I don’t have a swap waiting yet. Tell me what you’d like to change in the outfit, for example the shoes, fit, or colour."
       };
     }
     const swapLine = swap?.from && swap?.to
-      ? ` Updated ${swap.from.productDisplayName} to ${swap.to.productDisplayName}.`
+      ? ` I switched ${swap.from.productDisplayName} for ${swap.to.productDisplayName}.`
       : "";
     await saveSession(session);
     return {
       handled: true,
-      response: `Done. Mira updated the WhatsApp outfit preview and kept the basket grounded in RetailNEXT inventory.${swapLine}`
+      response: [
+        `Done. I’ve updated the outfit and kept it grounded in RetailNEXT inventory.${swapLine}`,
+        "",
+        updatedOutfitActionMessage(session)
+      ].join("\n")
     };
   }
 
-  if (text === "save" || text === "save this outfit") {
+  if ((text === "save" || text === "save this outfit" || wantsToSaveOutfit(text, session)) && session.recommendation) {
     return {
       handled: true,
-      response: `Saved-look demo step: Mira can send the full styling notes by email from the RetailNEXT flow, with item rationale and store availability included.`
+      response: savedOutfitMessage(session)
+    };
+  }
+
+  if (wantsToPurchaseOutfit(text, session)) {
+    return {
+      handled: true,
+      response: purchaseOutfitMessage(session)
     };
   }
 
@@ -1149,7 +1271,7 @@ export async function handleTwilioWebhook(req, res, { schedule = (promise) => { 
   const to = compactText(form.To, TWILIO_WHATSAPP_FROM);
   const message = compactText(form.Body);
   const messageSid = compactText(form.MessageSid || form.SmsMessageSid || form.SmsSid);
-  if (!from) return sendXml(res, "Mira could not identify the WhatsApp sender.");
+  if (!from) return sendXml(res, "I couldn’t identify the WhatsApp sender.");
 
   const session = await loadSession(from, to);
   const command = await handleImmediateCommand(session, message);
@@ -1178,8 +1300,8 @@ export async function handleTwilioWebhook(req, res, { schedule = (promise) => { 
 
   safeSendTypingIndicator(messageSid);
   const ack = session.recommendation
-    ? "Mira is checking the current outfit against the RetailNEXT catalogue and store availability."
-    : "Mira is checking the RetailNEXT catalogue, budget and store availability now.";
+    ? "I’m checking the current outfit against the RetailNEXT catalogue and store availability."
+    : "I’m checking the RetailNEXT catalogue, budget and store availability now.";
   sendXml(res, ack);
 
   schedule(handleAsyncMessage(from, message, session, null, messageSid));
