@@ -14,6 +14,10 @@ const TWILIO_TYPING_INDICATORS_ENABLED = process.env.TWILIO_TYPING_INDICATORS_EN
 const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const WHATSAPP_SEND_SPACING_MS = Number(process.env.WHATSAPP_SEND_SPACING_MS || 1300);
 const WHATSAPP_FAST_REPLY_TYPING_DELAY_MS = Number(process.env.WHATSAPP_FAST_REPLY_TYPING_DELAY_MS || 650);
+const WHATSAPP_ASYNC_TYPING_PULSE_DELAYS_MS = (process.env.WHATSAPP_ASYNC_TYPING_PULSE_DELAYS_MS || "1500,8000,16000")
+  .split(",")
+  .map((value) => Number(value.trim()))
+  .filter((value) => Number.isFinite(value) && value > 0);
 const BLOB_READ_WRITE_TOKEN = process.env.BLOB_READ_WRITE_TOKEN || "";
 const SESSION_BLOB_PREFIX = "whatsapp/sessions";
 const WHATSAPP_RECOMMENDATION_CARD_LIMIT = Number(process.env.WHATSAPP_RECOMMENDATION_CARD_LIMIT || 4);
@@ -628,6 +632,20 @@ function safeSendTypingIndicator(messageSid) {
   });
 }
 
+function startTypingIndicatorPulse(messageSid, delays = WHATSAPP_ASYNC_TYPING_PULSE_DELAYS_MS) {
+  const messageId = compactText(messageSid);
+  if (!messageId || !delays.length) return () => {};
+  let cancelled = false;
+  for (const delay of delays) {
+    sleep(delay).then(() => {
+      if (!cancelled) safeSendTypingIndicator(messageId);
+    });
+  }
+  return () => {
+    cancelled = true;
+  };
+}
+
 async function showTypingForFastReply(messageSid, { start = true } = {}) {
   if (!messageSid) return;
   if (start) safeSendTypingIndicator(messageSid);
@@ -1029,6 +1047,7 @@ async function continueChat(from, message, session) {
 }
 
 async function handleAsyncMessage(from, message, session, recommendationPayload = null, messageSid = "") {
+  const stopTypingPulse = startTypingIndicatorPulse(messageSid);
   try {
     safeSendTypingIndicator(messageSid);
     if (!session.recommendation) {
@@ -1041,6 +1060,8 @@ async function handleAsyncMessage(from, message, session, recommendationPayload 
     session.recommendationPending = null;
     await saveSession(session);
     await safeSendWhatsApp(from, `Mira hit a demo issue: ${error.message}. Reply "reset" and try the full-outfit prompt again.`);
+  } finally {
+    stopTypingPulse();
   }
 }
 
