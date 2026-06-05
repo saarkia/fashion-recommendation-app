@@ -288,6 +288,20 @@ function compactText(value, fallback = "") {
   return String(value || fallback || "").replace(/\s+/g, " ").trim();
 }
 
+function waFormat(value, marker) {
+  const text = compactText(value);
+  if (!text) return "";
+  return `${marker}${text.replaceAll(marker, "")}${marker}`;
+}
+
+function waBold(value) {
+  return waFormat(value, "*");
+}
+
+function waItalic(value) {
+  return waFormat(value, "_");
+}
+
 function cleanJson(text) {
   const trimmed = String(text || "").trim();
   const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
@@ -569,6 +583,18 @@ function styleLabel(stylePreference) {
   return styleLabels[stylePreference] || "your style";
 }
 
+function errorMessage(value, fallback = "Request failed") {
+  if (!value) return fallback;
+  if (typeof value === "string") return value;
+  if (value.message) return String(value.message);
+  if (value.error) return errorMessage(value.error, fallback);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return fallback;
+  }
+}
+
 async function postMiraJson(path, body) {
   const response = await fetch(`${MIRA_BASE_URL}${path}`, {
     method: "POST",
@@ -577,7 +603,7 @@ async function postMiraJson(path, body) {
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload.error || `${path} returned ${response.status}`);
+    throw new Error(errorMessage(payload.error || payload, `${path} returned ${response.status}`));
   }
   return payload;
 }
@@ -735,7 +761,7 @@ function itemSummaryLine(product, recommendation, index) {
   const stock = inventoryCount(product, store);
   const price = priceLabel(product.price);
   const stockLabel = stock > 0 ? `${stock} at ${store}` : `check ${store} stock`;
-  return `${index + 1}. ${roleLabel(product.role || product.articleType)}: ${product.productDisplayName}${price ? ` - ${price}` : ""} (${stockLabel})`;
+  return `${index + 1}. ${waBold(`${roleLabel(product.role || product.articleType)}:`)} ${product.productDisplayName}${price ? ` - ${price}` : ""} (${stockLabel})`;
 }
 
 function formatOutfitList(recommendation) {
@@ -750,11 +776,11 @@ function pluralPiece(count) {
 
 function outfitActionPrompt(recommendation = {}) {
   const store = recommendation.store || "your local store";
-  return `Everything here is available at ${store} today. Would you like me to save the outfit so you can try it on in store, or would you rather buy it now on the site? If you want a tweak, just tell me what you’d change.`;
+  return `${waBold(`Everything here is available at ${store} today.`)} Would you like me to save the outfit so you can try it on in store, or would you rather buy it now on the site? If you want a tweak, just tell me what you’d change.`;
 }
 
 function outfitPurchaseLine() {
-  return `Buy the look online: ${MIRA_BASE_URL}`;
+  return `${waBold("Buy the look online:")} ${MIRA_BASE_URL}`;
 }
 
 function normalizeRecommendationIntro(line) {
@@ -799,9 +825,9 @@ function formatRecommendation(recommendation) {
     intro,
     `I checked ${itemCount} ${pluralPiece(itemCount)} against ${recommendation.store} availability before showing them to you.`,
     "",
-    `Basket: $${basketValue} | Available today: ${availableToday}/${itemCount} at ${recommendation.store}`,
-    outfitList ? `Pieces:\n${outfitList}` : "",
-    openAiSignal,
+    `${waBold("Basket:")} $${basketValue} | ${waBold("Available today:")} ${availableToday}/${itemCount} at ${recommendation.store}`,
+    outfitList ? `${waBold("Pieces:")}\n${outfitList}` : "",
+    waItalic(openAiSignal),
     outfitList ? cardNote : "",
     "",
     outfitPurchaseLine(),
@@ -815,8 +841,8 @@ function formatProductCaption(product, recommendation) {
   const stock = inventoryCount(product, store);
   const price = priceLabel(product.price);
   return [
-    `${roleLabel(product.role || product.articleType)}: ${product.productDisplayName}`,
-    `${price || "Price in app"} | ${stock} at ${store}`,
+    `${waBold(`${roleLabel(product.role || product.articleType)}:`)} ${product.productDisplayName}`,
+    `${waBold(price || "Price in app")} | ${waItalic(`${stock} at ${store}`)}`,
     normalizeMiraVoice(compactText(product.why))
   ].filter(Boolean).join("\n");
 }
@@ -842,8 +868,8 @@ async function sendRecommendationMessages(from, recommendation) {
 function formatPreview(data) {
   const lines = [];
   if (data.previewSwap?.from && data.previewSwap?.to) {
-    lines.push(`I can switch ${data.previewSwap.from.productDisplayName} for ${data.previewSwap.to.productDisplayName}.`);
-    lines.push("I checked that swap against RetailNEXT inventory and local availability.");
+    lines.push(`I can switch ${waBold(data.previewSwap.from.productDisplayName)} for ${waBold(data.previewSwap.to.productDisplayName)}.`);
+    lines.push(waItalic("I checked that swap against RetailNEXT inventory and local availability."));
   } else {
     lines.push(normalizeMiraVoice(compactText(data.assistantMessage, "I found a preview update for this outfit.")));
   }
@@ -855,7 +881,7 @@ function formatPreview(data) {
 function formatLookup(data) {
   const lookup = data.lookupResults;
   if (!lookup?.matches?.length) return normalizeMiraVoice(compactText(data.assistantMessage, "I checked store availability."));
-  const matches = lookup.matches.slice(0, 3).map((item, index) => `${index + 1}. ${item.productDisplayName} - $${item.price} (${item.inventoryCount} in store)`);
+  const matches = lookup.matches.slice(0, 3).map((item, index) => `${index + 1}. ${waBold(item.productDisplayName)} - $${item.price} (${item.inventoryCount} in store)`);
   return [
     normalizeMiraVoice(compactText(data.assistantMessage, lookup.summary)),
     "",
@@ -905,7 +931,7 @@ function intakeIntroPrompt() {
   return [
     "Hi, I’m Mira, RetailNEXT’s stylist. I can build a complete outfit from the catalogue, keep it inside budget, check store availability, and send the pieces with images here.",
     "",
-    "What event or moment are you dressing for? For example: first day at a new job, outdoor wedding, business conference, holiday party, or vacation."
+    `${waBold("What event or moment are you dressing for?")} For example: first day at a new job, outdoor wedding, business conference, holiday party, or vacation.`
   ].join("\n");
 }
 
@@ -913,16 +939,16 @@ function intakeQuestion(field, intake) {
   const payload = intake.payload || {};
   if (field === "eventType") {
     if (payload.budgetMax) {
-      return `Got it — I’ll keep it under $${payload.budgetMax}. What event or moment are you dressing for? For example: first day at a new job, outdoor wedding, business conference, holiday party, or vacation.`;
+      return `Got it — I’ll keep it under ${waBold(`$${payload.budgetMax}`)}. What event or moment are you dressing for? For example: first day at a new job, outdoor wedding, business conference, holiday party, or vacation.`;
     }
     return intakeIntroPrompt();
   }
   if (field === "budgetMax") {
-    return `Got it — ${eventLabel(payload.eventType)}. What budget should I keep the full outfit under? For example: $400.`;
+    return `Got it — ${eventLabel(payload.eventType)}. ${waBold("What budget should I keep the full outfit under?")} For example: $400.`;
   }
   if (field === "stylePreference") {
     const budget = payload.budgetMax ? `$${payload.budgetMax}` : "that budget";
-    return `Great, I’ll keep it under ${budget}. What style direction do you want: minimal, classic, comfortable, or trend-forward?`;
+    return `Great, I’ll keep it under ${waBold(budget)}. ${waBold("What style direction do you want?")} Minimal, classic, comfortable, or trend-forward all work.`;
   }
   return intakeIntroPrompt();
 }
@@ -931,16 +957,16 @@ function intakeRetryQuestion(field, intake) {
   const payload = intake.payload || {};
   if (field === "eventType") {
     if (payload.budgetMax) {
-      return `Got it — I’ll keep it under $${payload.budgetMax}. What event or moment are you dressing for?`;
+      return `Got it — I’ll keep it under ${waBold(`$${payload.budgetMax}`)}. ${waBold("What event or moment are you dressing for?")}`;
     }
-    return "I didn’t catch the occasion yet. What are you dressing for? For example: first day at a new job, outdoor wedding, business conference, holiday party, or vacation.";
+    return `I didn’t catch the occasion yet. ${waBold("What are you dressing for?")} For example: first day at a new job, outdoor wedding, business conference, holiday party, or vacation.`;
   }
   if (field === "budgetMax") {
-    return `I’ve got ${eventLabel(payload.eventType)}. What budget should I keep the full outfit under?`;
+    return `I’ve got ${eventLabel(payload.eventType)}. ${waBold("What budget should I keep the full outfit under?")}`;
   }
   if (field === "stylePreference") {
     const budget = payload.budgetMax ? `$${payload.budgetMax}` : "that budget";
-    return `I’ve got the occasion and ${budget} budget. What style direction should I use: minimal, classic, comfortable, or trend-forward?`;
+    return `I’ve got the occasion and ${waBold(budget)} budget. ${waBold("What style direction should I use?")} Minimal, classic, comfortable, or trend-forward all work.`;
   }
   return intakeIntroPrompt();
 }
@@ -1002,8 +1028,8 @@ function finaliseIntakePayload(intake) {
 
 function readyToRecommendPrompt(payload) {
   return [
-    `Perfect — I’ve got ${eventLabel(payload.eventType)}, ${styleLabel(payload.stylePreference)}, and a $${payload.budgetMax} budget.`,
-    `I’m checking the RetailNEXT catalogue, budget and ${payload.store} availability now.`
+    `Perfect — I’ve got ${waBold(eventLabel(payload.eventType))}, ${waBold(styleLabel(payload.stylePreference))}, and a ${waBold(`$${payload.budgetMax}`)} budget.`,
+    `I’m checking the RetailNEXT catalogue, budget and ${waBold(payload.store)} availability now.`
   ].join("\n");
 }
 
@@ -1182,7 +1208,7 @@ function savedOutfitMessage(session) {
   const count = products.length || recommendation.business?.itemCount || 0;
   const availability = count ? `${availableToday}/${count} pieces are available at ${store} today` : `the look is available at ${store}`;
   return [
-    `I’ve saved this look for your RetailNEXT store visit. ${availability}, so the team can pull it together for you to try on.`,
+    `${waBold("I’ve saved this look for your RetailNEXT store visit.")} ${waItalic(availability)}, so the team can pull it together for you to try on.`,
     "",
     `If you’d rather buy now, you can open the outfit here: ${MIRA_BASE_URL}`
   ].join("\n");
@@ -1192,9 +1218,9 @@ function purchaseOutfitMessage(session) {
   const recommendation = session.recommendation || {};
   const store = recommendation.store || session.recommendationPayload?.store || demoDefaults.store;
   return [
-    `You can buy the outfit now here: ${MIRA_BASE_URL}`,
+    `${waBold("You can buy the outfit now here:")} ${MIRA_BASE_URL}`,
     "",
-    `It’s also in stock at ${store} today if you’d rather try it on first. I can save the look for that store visit if that’s easier.`
+    `${waItalic(`It’s also in stock at ${store} today`)} if you’d rather try it on first. I can save the look for that store visit if that’s easier.`
   ].join("\n");
 }
 
@@ -1202,7 +1228,7 @@ function updatedOutfitActionMessage(session) {
   const recommendation = session.recommendation || {};
   const store = recommendation.store || session.recommendationPayload?.store || demoDefaults.store;
   return [
-    `The updated outfit is still in stock at ${store} today.`,
+    `${waBold("The updated outfit is still in stock")} at ${store} today.`,
     "",
     `Would you like me to save it so you can try it on in store, or would you rather buy it now here: ${MIRA_BASE_URL}`
   ].join("\n");
@@ -1235,7 +1261,7 @@ async function handleImmediateCommand(session, message) {
       };
     }
     const swapLine = swap?.from && swap?.to
-      ? ` I switched ${swap.from.productDisplayName} for ${swap.to.productDisplayName}.`
+      ? ` I switched ${waBold(swap.from.productDisplayName)} for ${waBold(swap.to.productDisplayName)}.`
       : "";
     await saveSession(session);
     return {
