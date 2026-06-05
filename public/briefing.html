@@ -63,12 +63,12 @@
               <span>customers ask in natural language or share a photo</span>
             </div>
             <div>
-              <strong>Stock aware</strong>
-              <span>SKU, store, size, and price checked before display</span>
+              <strong>Reality checked</strong>
+              <span>inventory, size, price and fulfilment checked before display</span>
             </div>
             <div>
-              <strong>Channel ready</strong>
-              <span>same assistant pattern across site, app, WhatsApp, store, and email follow-up</span>
+              <strong>Reusable pattern</strong>
+              <span>one assistant can reach web, app, WhatsApp, store and email follow-up</span>
             </div>
           </div>
         </section>
@@ -122,7 +122,7 @@
 
           <div class="source-note-card">
             <p class="eyebrow">Core point</p>
-            <p>OpenAI gives RetailNext a conversational front door for product discovery and a structured bridge into retail systems.</p>
+            <p>OpenAI gives RetailNext a conversational front door; RetailNext systems keep the answer tied to real stock and approved actions.</p>
           </div>
         </section>
 
@@ -130,25 +130,25 @@
           <div class="brief-section-copy">
             <p class="eyebrow">03 Assistant approach</p>
             <h2>An inventory-grounded AI assistant for event shopping.</h2>
-            <p>OpenAI interprets text, images, and follow-up chat. RetailNext verifies products, stock, price, and fulfilment.</p>
+            <p>OpenAI interprets text, images and follow-up chat. RetailNext verifies stock, price and fulfilment before a recommendation is shown.</p>
           </div>
           <div class="mission-board" aria-label="Solution flow">
             <div><strong>Understand</strong><span>Text, image, occasion, style, budget, store</span></div>
             <div><strong>Retrieve</strong><span>Semantic catalogue matches</span></div>
-            <div><strong>Ground</strong><span>SKU, inventory, price, size, fulfilment</span></div>
+            <div><strong>Ground</strong><span>Inventory API checks SKU, size, price and fulfilment</span></div>
             <div><strong>Converse</strong><span>Swap, explain, refine, email</span></div>
-            <div><strong>Activate</strong><span>Basket, associate handoff, email follow-up</span></div>
+            <div><strong>Activate</strong><span>Basket, associate handoff, engagement follow-up</span></div>
           </div>
           <div class="brief-grid two">
             <article class="brief-card emphasis">
               <span>OpenAI role</span>
               <h3>Understand and converse</h3>
-              <p>Intent extraction, image understanding, semantic retrieval inputs, action selection, explanations, and review.</p>
+              <p>Intent extraction, image understanding, semantic retrieval inputs, tool choice, explanations and review.</p>
             </article>
             <article class="brief-card">
               <span>RetailNext role</span>
               <h3>Control retail decisions</h3>
-              <p>Catalogue SKUs, price, stock, store rules, basket changes, fulfilment, and email delivery.</p>
+              <p>Catalogue, inventory, price, basket state, store rules, fulfilment and engagement-platform actions.</p>
             </article>
           </div>
         </section>
@@ -156,8 +156,8 @@
         <section id="demo-bridge" class="brief-section" data-brief-step>
           <div class="brief-section-copy">
             <p class="eyebrow">04 Channels</p>
-            <h2>The chatbot pattern can sit wherever customers already shop.</h2>
-            <p>One assistant workflow can serve the website, mobile app, WhatsApp, associates, and lifecycle messaging.</p>
+            <h2>The agent can use approved tools wherever customers already shop.</h2>
+            <p>In this demo the tools are API calls; in production they could be existing services or MCP servers for inventory, basket and engagement.</p>
           </div>
 
           <div class="channel-interactive" aria-label="Channel deployment options">
@@ -180,8 +180,8 @@
         <section id="sequence" class="brief-section" data-brief-step>
           <div class="brief-section-copy">
             <p class="eyebrow">05 Generate flow</p>
-            <h2>Generate outfit: propose, verify, display.</h2>
-            <p>The boundary is simple: OpenAI interprets and explains; RetailNext validates what can be shown and sold.</p>
+            <h2>Generate outfit: suggest, verify, display.</h2>
+            <p>LLMs are non-deterministic, so the app treats model output as a proposal and uses RetailNext APIs as the hard checks.</p>
           </div>
 
           <div class="source-legend" aria-label="Responsibility legend">
@@ -201,15 +201,15 @@
             <article class="sequence-step retailnext-owned">
               <span>2</span>
               <div class="step-source"><em>RetailNext backend</em></div>
-              <h3>Resolve constraints</h3>
-              <p>Store, size, budget, timing, starter-product context.</p>
-              <code>POST /api/recommend</code>
+              <h3>Check inventory</h3>
+              <p>Confirm SKU, size, price, store and fulfilment before display.</p>
+              <code>POST /api/recommend -> inventory checks</code>
             </article>
             <article class="sequence-step openai-owned">
               <span>3</span>
               <div class="step-source"><em>OpenAI API</em></div>
               <h3>Structure intent</h3>
-              <p>GPT-4o mini returns attributes, outfit roles, and search phrases.</p>
+              <p>Model returns structured attributes, outfit roles and search phrases.</p>
               <code>analyzeReferenceWithOpenAI()</code>
             </article>
             <article class="sequence-step hybrid-owned">
@@ -223,14 +223,14 @@
               <span>5</span>
               <div class="step-source"><em>RetailNext rules</em></div>
               <h3>Apply retail rules</h3>
-              <p>Stock, budget, urgency, outfit role, colour, event fit.</p>
+              <p>Reject unavailable items; rank by stock, budget, urgency, outfit role and event fit.</p>
               <code>candidateScore() + guardrail()</code>
             </article>
             <article class="sequence-step hybrid-owned">
               <span>6</span>
               <div class="step-source"><em>OpenAI copy + RetailNext facts</em></div>
               <h3>Explain and review</h3>
-              <p>OpenAI writes rationale and reviews the actual basket.</p>
+              <p>OpenAI writes rationale from verified product facts; evals check quality, cost and latency.</p>
               <code>generateBusinessCopy() + reviewOutfitWithOpenAI()</code>
             </article>
             <article class="sequence-step retailnext-owned">
@@ -244,15 +244,15 @@
 
           <div class="sequence-output">
             <strong>Important boundary</strong>
-            <p>OpenAI never becomes the source of product truth. RetailNext owns catalogue data, price, stock, basket state, and fulfilment rules.</p>
+            <p>The model can propose, but RetailNext APIs decide. Every shown product has passed SKU, stock, size, price and fulfilment checks.</p>
           </div>
         </section>
 
         <section id="architecture" class="brief-section" data-brief-step>
           <div class="brief-section-copy">
             <p class="eyebrow">06 Architecture</p>
-            <h2>Flexible conversation, controlled retail decisions.</h2>
-            <p>Click through the flow to show the OpenAI and RetailNext boundary.</p>
+            <h2>Flexible agent, controlled actions.</h2>
+            <p>The agent can call only approved tools: retrieval, inventory, basket, engagement and review.</p>
           </div>
 
           <div class="architecture-demo">
@@ -288,18 +288,18 @@
                 <li>Text and image understanding</li>
                 <li>Structured JSON shopping briefs</li>
                 <li>Embeddings for semantic retrieval</li>
-                <li>Tool patterns for chat actions</li>
-                <li>Grounded generation for shopper and associate copy</li>
+                <li>Tool selection and structured action requests</li>
+                <li>Grounded copy and evals for quality, latency and cost</li>
               </ul>
             </div>
             <div>
               <p class="eyebrow">RetailNext owned</p>
               <ul>
-                <li>Customer surfaces and basket state</li>
-                <li>Catalogue, product images, prices, and inventory</li>
+                <li>Approved APIs or MCP servers for inventory, basket and engagement</li>
+                <li>Catalogue, product images, prices, stores and inventory</li>
                 <li>Budget, availability, substitutes, and fulfilment rules</li>
                 <li>Preview/apply safety for basket changes</li>
-                <li>Business KPIs, channel deployment, and email handoff</li>
+                <li>Pilot design, ROI targets, channel deployment and email handoff</li>
               </ul>
             </div>
           </div>
@@ -308,8 +308,8 @@
         <section id="platform" class="brief-section" data-brief-step>
           <div class="brief-section-copy">
             <p class="eyebrow">07 Why OpenAI</p>
-            <h2>OpenAI is the platform layer for the assistant loop.</h2>
-            <p>Multimodal understanding, structured outputs, embeddings, model choice, tool actions, and evals work together in one pattern.</p>
+            <h2>OpenAI is the platform layer for a reusable assistant pattern.</h2>
+            <p>Multimodal understanding, structured outputs, embeddings, tool calling and evals form a pattern RetailNext can reuse beyond this one journey.</p>
           </div>
 
           <div class="platform-interactive">
@@ -329,7 +329,7 @@
             <div><span>Intent</span><strong>GPT-4o mini</strong><em>text, image, shopping brief</em></div>
             <div><span>Retrieval</span><strong>text-embedding-3-large</strong><em>semantic catalogue search</em></div>
             <div><span>Reasoning</span><strong>GPT-4.1</strong><em>review, rationale, copy</em></div>
-            <div><span>Governance</span><strong>Evals + guardrails</strong><em>quality, latency, cost, risk</em></div>
+            <div><span>Evals</span><strong>LLM judge + human review</strong><em>accuracy, latency, cost, customer experience</em></div>
           </div>
         </section>
 
@@ -337,7 +337,7 @@
           <div class="brief-section-copy">
             <p class="eyebrow">08 Business outcomes</p>
             <h2>Business value map for RetailNext.</h2>
-            <p>Use the value toggle to connect OpenAI capabilities to measurable retail outcomes.</p>
+            <p>The target is measurable ROI, not a novelty chat surface.</p>
           </div>
 
           <div class="value-interactive" aria-label="Business value drivers">
@@ -359,7 +359,7 @@
             <article class="brief-card metric-card">
               <span>Revenue</span>
               <strong>Stronger event conversion</strong>
-              <p>Complete outfits increase basket confidence.</p>
+              <p>Inventory-grounded outfits increase basket confidence.</p>
             </article>
             <article class="brief-card metric-card">
               <span>Operations</span>
@@ -367,15 +367,15 @@
               <p>Associates get item rationale and backup options.</p>
             </article>
             <article class="brief-card metric-card">
-              <span>Planning</span>
-              <strong>Demand signal</strong>
-              <p>Unmet intent informs allocation and recovery.</p>
+              <span>Reuse</span>
+              <strong>More value from one build</strong>
+              <p>The same tool and eval pattern can support web, store, messaging and recovery journeys.</p>
             </article>
           </div>
 
           <div class="source-note-card">
             <p class="eyebrow">Pilot scorecard</p>
-            <p>Measure product engagement, add-to-basket, availability-related complaints, associate lookup time, and recovery engagement.</p>
+            <p>Relevant precedent: OpenAI worked with Zalando on an assistant for product discovery, with evals as a key part of improving quality. RetailNext should use the same discipline: A/B test 10% of event-shopping traffic, then scale when lift covers cost.</p>
           </div>
         </section>
 
@@ -383,29 +383,29 @@
           <div class="brief-section-copy">
             <p class="eyebrow">09 Rollout</p>
             <h2>Crawl, walk, run.</h2>
-            <p>Prove engagement first, then integrate operations and expand channels.</p>
+            <p>Prove the ROI first, then expand the same assistant pattern across the wider commerce journey.</p>
           </div>
           <div class="rollout-timeline" aria-label="Rollout timeline">
             <article>
               <span>0-8 weeks</span>
               <h3>Crawl</h3>
-              <p>Text assistant, limited categories, selected stores, static inventory snapshot.</p>
+              <p>10% web A/B test, selected stores, text assistant, inventory snapshot and baseline scorecard.</p>
             </article>
             <article>
               <span>2-4 months</span>
               <h3>Walk</h3>
-              <p>Photo input, real-time inventory, guardrail tuning, WhatsApp pilot.</p>
+              <p>Photo input, live inventory APIs, engagement-platform actions and eval tuning.</p>
             </article>
             <article>
               <span>Scale</span>
               <h3>Run</h3>
-              <p>Associate assistant, email recovery, personalisation, continuous eval loop.</p>
+              <p>Scale across ecommerce, associate tools, WhatsApp and email once ROI is clear.</p>
             </article>
           </div>
           <div class="closing-statement">
             <p class="eyebrow">Closing line</p>
             <p>
-              "Start with the customer conversation, ground it in RetailNext inventory, and measure the commercial journey end to end."
+              "Start small, ground every answer in inventory, prove ROI against the control, then reuse the assistant pattern across channels."
             </p>
           </div>
         </section>
